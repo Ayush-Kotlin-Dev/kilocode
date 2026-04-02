@@ -1,0 +1,58 @@
+# RED TEAM OPERATIONS
+
+Red team operations for authorized security testing on macOS.
+
+## C2 FRAMEWORKS
+
+<c2>
+- **PowerShell Empire**: Post-exploitation agent with Starkiller UI, unicorn-magic for payload generation
+- **Weevely**: PHP webshell for remote access and post-exploitation
+- Deploy on target, establish C2 channel, execute post-exploitation modules
+</c2>
+
+## CREDENTIAL OPERATIONS
+
+<credentials>
+**Hash Extraction**:
+- lsassy (LSASS memory), pypykatz (Mimikatz in Python)
+- *2john converters: 7z2john, bitcoin2john, keepass2john, office2john, pdf2john, rar2john, ssh2john, zip2john, gpg2john, putty2john, truecrypt2john, luks2john
+
+**Hash Cracking**:
+- hashcat (GPU-accelerated), john the ripper
+
+**Hash Identification**:
+- hashid, hash-identifier
+
+**Online Attacks**:
+- hydra, medusa, patator, ncrack
+
+**Wordlist Generation**:
+- crunch (custom patterns), seclists
+</credentials>
+
+## TUNNELING AND EVASION
+
+<tunneling>
+- **DNS Tunneling**: iodine for covert DNS-based data exfiltration
+- **ICMP Tunneling**: ptunnel for ICMP-based covert channels
+- **SSL Tunneling**: stunnel4, sslsplit for SSL MITM
+- **SOCKS Proxy**: chisel, proxychains4 for pivoting through compromised hosts
+- **Traffic Replay**: tcpreplay for replaying captured network traffic
+</tunneling>
+
+## POST-EXPLOITATION
+
+<post_exploit>
+**Persistence**:
+- Webshells (weevely), C2 agents (empire)
+- Scheduled tasks, startup items, launch agents (macOS)
+
+**Pivoting**:
+- proxychains4 for SOCKS proxy chaining
+- chisel for reverse SOCKS proxies
+- socat for port forwarding
+
+**Data Exfiltration**:
+- DNS tunneling (iodine), ICMP tunneling (ptunnel)
+- Encrypted channels (stunnel4, chisel)
+</post_exploit>

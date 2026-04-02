@@ -34,7 +34,7 @@ describe("McpMigrator", () => {
       })
     })
 
-    test("converts disabled servers with enabled: false", () => {
+    test("returns null for disabled servers", () => {
       const server: McpMigrator.KilocodeMcpServer = {
         command: "npx",
         args: ["-y", "some-package"],
@@ -43,11 +43,7 @@ describe("McpMigrator", () => {
 
       const result = McpMigrator.convertServer("disabled-server", server)
 
-      expect(result).toEqual({
-        type: "local",
-        command: ["npx", "-y", "some-package"],
-        enabled: false,
-      })
+      expect(result).toBeNull()
     })
 
     test("omits environment when env is empty object", () => {
@@ -298,7 +294,7 @@ describe("McpMigrator", () => {
       })
     })
 
-    test("imports disabled servers with enabled: false", async () => {
+    test("skips disabled servers and records them", async () => {
       await using tmp = await tmpdir({
         init: async (dir) => {
           const settingsDir = path.join(dir, ".kilo")
@@ -320,15 +316,10 @@ describe("McpMigrator", () => {
       })
 
       expect(result.mcp).toHaveProperty("enabled")
-      expect(result.mcp.enabled).toEqual({
-        type: "local",
-        command: ["enabled-cmd"],
-      })
-      expect(result.mcp).toHaveProperty("disabled")
-      expect(result.mcp.disabled).toEqual({
-        type: "local",
-        command: ["disabled-cmd"],
-        enabled: false,
+      expect(result.mcp).not.toHaveProperty("disabled")
+      expect(result.skipped).toContainEqual({
+        name: "disabled",
+        reason: "Server is disabled",
       })
     })
 
@@ -504,7 +495,7 @@ describe("McpMigrator", () => {
         })
       })
 
-      test("converts disabled remote server with enabled: false", () => {
+      test("returns null for disabled remote server", () => {
         const server = {
           type: "streamable-http",
           url: "http://localhost:4321/mcp",
@@ -513,11 +504,7 @@ describe("McpMigrator", () => {
 
         const result = McpMigrator.convertServer("disabled-remote", server)
 
-        expect(result).toEqual({
-          type: "remote",
-          url: "http://localhost:4321/mcp",
-          enabled: false,
-        })
+        expect(result).toBeNull()
       })
 
       test("omits headers when not provided on remote server", () => {
@@ -691,7 +678,7 @@ describe("McpMigrator", () => {
         })
       })
 
-      test("imports disabled remote servers with enabled: false", async () => {
+      test("skips disabled remote servers and records them", async () => {
         await using tmp = await tmpdir({
           init: async (dir) => {
             const settingsDir = path.join(dir, ".kilo")
@@ -720,15 +707,10 @@ describe("McpMigrator", () => {
         })
 
         expect(result.mcp).toHaveProperty("enabled")
-        expect(result.mcp.enabled).toEqual({
-          type: "remote",
-          url: "http://localhost:4321/mcp",
-        })
-        expect(result.mcp).toHaveProperty("disabled")
-        expect(result.mcp.disabled).toEqual({
-          type: "remote",
-          url: "http://localhost:4322/mcp",
-          enabled: false,
+        expect(result.mcp).not.toHaveProperty("disabled")
+        expect(result.skipped).toContainEqual({
+          name: "disabled",
+          reason: "Server is disabled",
         })
       })
     })

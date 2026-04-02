@@ -121,7 +121,6 @@ export namespace MCP {
   function registerNotificationHandlers(client: MCPClient, serverName: string) {
     client.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
       log.info("tools list changed notification received", { server: serverName })
-      ;(await state()).toolsCache.delete(serverName) // kilocode_change
       Bus.publish(ToolsChanged, { server: serverName })
     })
   }
@@ -225,7 +224,6 @@ export namespace MCP {
       return {
         status,
         clients,
-        toolsCache: new Map<string, MCPToolDef[]>(), // kilocode_change — per-server listTools cache
       }
     },
     async (state) => {
@@ -304,7 +302,6 @@ export namespace MCP {
 
   export async function add(name: string, mcp: Config.Mcp) {
     const s = await state()
-    s.toolsCache.delete(name) // kilocode_change
     const result = await create(name, mcp)
     if (!result) {
       const status = {
@@ -562,7 +559,6 @@ export namespace MCP {
   }
 
   export async function connect(name: string) {
-    ;(await state()).toolsCache.delete(name) // kilocode_change
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
     const mcp = config[name]
@@ -603,7 +599,6 @@ export namespace MCP {
 
   export async function disconnect(name: string) {
     const s = await state()
-    s.toolsCache.delete(name) // kilocode_change
     const client = s.clients[name]
     if (client) {
       await client.close().catch((error) => {
@@ -628,12 +623,6 @@ export namespace MCP {
 
     const toolsResults = await Promise.all(
       connectedClients.map(async ([clientName, client]) => {
-        // kilocode_change start — use cached listTools when available
-        const cached = s.toolsCache.get(clientName)
-        if (cached) {
-          return { clientName, client, toolsResult: { tools: cached } }
-        }
-        // kilocode_change end
         const toolsResult = await client.listTools().catch((e) => {
           log.error("failed to get tools", { clientName, error: e.message })
           const failedStatus = {
@@ -644,7 +633,6 @@ export namespace MCP {
           delete s.clients[clientName]
           return undefined
         })
-        if (toolsResult) s.toolsCache.set(clientName, toolsResult.tools) // kilocode_change
         return { clientName, client, toolsResult }
       }),
     )

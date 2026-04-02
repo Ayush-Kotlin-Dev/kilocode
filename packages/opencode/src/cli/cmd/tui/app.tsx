@@ -43,7 +43,6 @@ import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { registerKiloCommands } from "@/kilocode/kilo-commands" // kilocode_change
-import { KiloClawView } from "@/kilocode/claw/view" // kilocode_change
 import { initializeTUIDependencies } from "@kilocode/kilo-gateway/tui" // kilocode_change
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
@@ -284,7 +283,7 @@ function App() {
   createEffect(() => {
     if (!terminalTitleEnabled() || Flag.KILO_DISABLE_TERMINAL_TITLE) return
 
-    const titleDefault = "Kilo CLI" // kilocode_change
+    const titleDefault = "PentestClaw CLI" // kilocode_change
 
     if (route.data.type === "home") {
       renderer.setTerminalTitle(titleDefault) // kilocode_change
@@ -302,12 +301,6 @@ function App() {
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
       renderer.setTerminalTitle(`${titleDefault} | ${title}`) // kilocode_change
     }
-
-    // kilocode_change start
-    if (route.data.type === "kiloclaw") {
-      renderer.setTerminalTitle(`${titleDefault} | KiloClaw`)
-    }
-    // kilocode_change end
   })
 
   const args = useArgs()
@@ -792,7 +785,7 @@ function App() {
     toast.show({
       variant: "info",
       title: "Update Available",
-      message: `Kilo v${evt.properties.version} is available. Run 'kilo upgrade' to update manually.`, // kilocode_change
+      message: `PentestClaw v${evt.properties.version} is available. Run 'pentestclaw upgrade' to update manually.`, // kilocode_change
       duration: 10000,
     })
   })
@@ -819,11 +812,6 @@ function App() {
         <Match when={route.data.type === "session"}>
           <Session />
         </Match>
-        {/* kilocode_change start */}
-        <Match when={route.data.type === "kiloclaw"}>
-          <KiloClawView />
-        </Match>
-        {/* kilocode_change end */}
       </Switch>
     </box>
   )

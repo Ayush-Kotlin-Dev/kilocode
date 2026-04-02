@@ -172,6 +172,7 @@ export function Home() {
         <box flexShrink={0}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>
+        <text fg={theme.textMuted}>Made with ♥ by Ayush</text>
       </box>
     </>
   )

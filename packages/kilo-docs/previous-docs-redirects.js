@@ -1,11 +1,5 @@
 module.exports = [
   {
-    source: "/docs/contributing/cline-to-kilo-migration",
-    destination: "/docs/contributing",
-    basePath: false,
-    permanent: true,
-  },
-  {
     source: "/docs/contributing/architecture/model-provider-blocklist",
     destination: "/docs/collaborate/enterprise/model-access-controls",
     basePath: false,

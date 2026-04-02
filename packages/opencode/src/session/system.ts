@@ -10,6 +10,13 @@ import PROMPT_GEMINI from "./prompt/gemini.txt"
 
 import PROMPT_CODEX from "./prompt/codex_header.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
+import PROMPT_PENTESTER from "./prompt/pentester.txt"
+import PROMPT_AD_SPECIALIST from "./prompt/ad_specialist.txt"
+import PROMPT_REDTEAM from "./prompt/redteam.txt"
+import PROMPT_EXPLOIT_DEV from "./prompt/exploit_dev.txt"
+import PROMPT_MSF_OPS from "./prompt/msf_ops.txt"
+import PROMPT_THREAT_MODEL from "./prompt/threat_model.txt"
+import PROMPT_REPORTING from "./prompt/reporting.txt"
 import type { Provider } from "@/provider/provider"
 
 // kilocode_change start
@@ -25,6 +32,20 @@ export namespace SystemPrompt {
   // kilocode_change start
   export function soul() {
     return SOUL.trim()
+  }
+
+  export function pentesting() {
+    return [
+      PROMPT_PENTESTER,
+      PROMPT_AD_SPECIALIST,
+      PROMPT_REDTEAM,
+      PROMPT_EXPLOIT_DEV,
+      PROMPT_MSF_OPS,
+      PROMPT_THREAT_MODEL,
+      PROMPT_REPORTING,
+    ]
+      .join("\n\n")
+      .trim()
   }
   // kilocode_change end
 
@@ -60,7 +81,7 @@ export namespace SystemPrompt {
   export async function environment(model: Provider.Model, editorContext?: EditorContext) {
     // kilocode_change end
     const project = Instance.project
-    return [
+    const lines = [
       [
         `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
         `Here is some useful information about the environment you are running in:`,
@@ -84,5 +105,11 @@ export namespace SystemPrompt {
         `</directories>`,
       ].join("\n"),
     ]
+    // kilocode_change start - add pentesting capabilities for macOS
+    if (process.platform === "darwin") {
+      lines.push(SystemPrompt.pentesting())
+    }
+    // kilocode_change end
+    return lines
   }
 }

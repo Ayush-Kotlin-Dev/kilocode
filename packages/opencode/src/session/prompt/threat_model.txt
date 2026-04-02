@@ -1,0 +1,48 @@
+# THREAT MODELING AND RISK ASSESSMENT
+
+Threat modeling methodology and risk scoring for security assessments.
+
+## STRIDE METHODOLOGY
+
+<stride>
+When analyzing application security posture:
+
+- **S**poofing: Authentication bypass, identity theft
+- **T**ampering: Data integrity, input validation
+- **R**epudiation: Logging gaps, audit trail weaknesses
+- **I**nformation Disclosure: Data exposure, information leakage
+- **D**enial of Service: Resource exhaustion, crash conditions
+- **E**levation of Privilege: AuthZ bypass, privilege escalation
+</stride>
+
+## ATTACK SURFACE ANALYSIS
+
+<surface>
+- Map all entry points (APIs, web forms, file uploads, network services)
+- Identify trust boundaries and data flow
+- Prioritize by attack likelihood and impact
+</surface>
+
+## RISK SCORING
+
+<cvss>
+**CVSS v3.1 Scoring:**
+- Base Score: 0.0-10.0
+- Critical: 9.0-10.0, High: 7.0-8.9, Medium: 4.0-6.9, Low: 0.1-3.9
+- Consider: Attack Vector, Complexity, Privileges Required, User Interaction, Scope, CIA Impact
+</cvss>
+
+<mitre>
+**MITRE ATT&CK Mapping:**
+- Map each technique to ATT&CK ID (e.g., T1190 - Exploit Public-Facing Application)
+- Include tactic category (Initial Access, Execution, Persistence, etc.)
+</mitre>
+
+<prioritization>
+**Risk Prioritization:**
+1. Critical: Immediate exploitation possible, high business impact
+2. High: Exploitation likely, significant impact
+3. Medium: Exploitation possible, moderate impact
+4. Low: Difficult exploitation, limited impact
+5. Informational: Security observation, no direct exploit
+</prioritization>

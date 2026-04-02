@@ -10,18 +10,21 @@ import { useTheme, tint } from "@tui/context/theme"
 const SHADOW_MARKER = /[_^~]/
 
 const ASCII_LOGO = [
-  `██ ▄█▀ ██ ██     ▄████▄   ▄█████ ██     ██ `,
-  `████   ██ ██     ██~~██   ██~~~~ ██     ██ `,
-  `██ ▀█▄ ██ ██████ ▀████▀   ▀█████ ██████ ██ `,
-  `~~  ~~ ~~ ~~~~~~  ~~~~     ~~~~~ ~~~~~~ ~~ `,
+  `  ██████╗ ███████╗███╗   ██╗████████╗ █████╗  ██████╗ ██╗__`,
+  `  ██╔══██╗██╔════╝████╗  ██║╚══██╔══╝██╔══██╗██╔════╝ ██║__`,
+  `  ██████╔╝█████╗  ██╔██╗ ██║   ██║   ███████║██║  ███╗██║__`,
+  `  ██╔═══╝ ██╔══╝  ██║╚██╗██║   ██║   ██╔══██║██║   ██║██║__`,
+  `  ██║     ███████╗██║ ╚████║   ██║   ██║  ██║╚██████╔╝██║__`,
+  `  ╚═╝     ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝__`,
+  `   _____________________________________________________________`,
 ]
 
 export function KiloLogo() {
   const { theme } = useTheme()
-  const yellow = RGBA.fromHex("#F8F675")
+  const green = RGBA.fromHex("#00FF41")
 
   const renderLine = (line: string): JSX.Element[] => {
-    const shadow = tint(theme.background, yellow, 0.25)
+    const shadow = tint(theme.background, green, 0.25)
     const elements: JSX.Element[] = []
     let i = 0
 
@@ -31,7 +34,7 @@ export function KiloLogo() {
 
       if (markerIndex === -1) {
         elements.push(
-          <text fg={yellow} selectable={false}>
+          <text fg={green} selectable={false}>
             {rest}
           </text>,
         )
@@ -40,7 +43,7 @@ export function KiloLogo() {
 
       if (markerIndex > 0) {
         elements.push(
-          <text fg={yellow} selectable={false}>
+          <text fg={green} selectable={false}>
             {rest.slice(0, markerIndex)}
           </text>,
         )
@@ -50,14 +53,14 @@ export function KiloLogo() {
       switch (marker) {
         case "_":
           elements.push(
-            <text fg={yellow} bg={shadow} selectable={false}>
+            <text fg={green} bg={shadow} selectable={false}>
               {" "}
             </text>,
           )
           break
         case "^":
           elements.push(
-            <text fg={yellow} bg={shadow} selectable={false}>
+            <text fg={green} bg={shadow} selectable={false}>
               ▀
             </text>,
           )

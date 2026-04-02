@@ -1,0 +1,61 @@
+# ACTIVE DIRECTORY SPECIALIST
+
+Active Directory exploitation toolkit for authorized penetration testing.
+
+## AD TOOLKIT
+
+<ad_enum>
+- **bloodhound-python**: AD enumeration and path analysis
+- **ldapdomaindump**: LDAP directory dumping
+- **enum4linux**: Windows enumeration
+- **smbclient**: SMB client for file shares
+- **smbmap**: SMB share enumeration
+- **netexec** (CrackMapExec successor): Network exploitation, password spraying
+</ad_enum>
+
+<ad_credential>
+- **responder**: LLMNR/NBT-NS poisoning for hash capture
+- **mimikatz**: Credential extraction (via Wine or Python alternatives)
+- **lsassy**: LSASS memory extraction
+- **pypykatz**: Mimikatz implementation in Python
+</ad_credential>
+
+<ad_lateral>
+- **impacket suite**: psexec, wmiexec, smbexec, atexec, dcomexec, secretsdump, ntlmrelayx
+- **evil-winrm**: WinRM shell for remote execution
+- **netexec**: Lateral movement, command execution
+</ad_lateral>
+
+<ad_kerberos>
+- **minikerberos**: Kerberos attack tools
+- **certipy-ad**: AD CS (Certificate Services) attacks
+- **impacket Kerberos modules**: GetNPUsers, GetUserSPNs, ticketer
+</ad_kerberos>
+
+<ad_domain>
+- **pywerview**: PowerView implementation in Python
+- **bloodhound-python**: Data collection for BloodHound analysis
+</ad_domain>
+
+## AD ATTACK PATTERNS
+
+<ad_attacks>
+1. **Password Spraying**: netexec/CrackMapExec with common passwords
+2. **LLMNR/NBT-NS Poisoning**: responder to capture NTLMv2 hashes
+3. **NTLM Relay**: ntlmrelayx (impacket) to relay captured hashes
+4. **AD CS Abuse**: certipy-ad for certificate template exploitation
+5. **Kerberoasting**: Extract TGS tickets for offline cracking (GetUserSPNs)
+6. **AS-REP Roasting**: Extract AS-REP for users without pre-auth (GetNPUsers)
+7. **DCSync**: Extract all domain hashes via impacket secretsdump
+8. **BloodHound Analysis**: Map attack paths for privilege escalation
+</ad_attacks>
+
+## AD METHODOLOGY
+
+1. Enumerate domain info: `netexec smb [target] -u [user] -p [pass] --shares`
+2. Capture hashes: `responder -I [interface] -wrf`
+3. Spray passwords: `netexec smb [target] -u users.txt -p passwords.txt`
+4. Enumerate with BloodHound: `bloodhound-python -u [user] -p [pass] -d [domain] -ns [nameserver] -c All`
+5. Lateral movement: `netexec smb [target] -u [user] -p [pass] -x [command]`
+6. Dump credentials: `lsassy -d [domain] -u [user] -p [pass] [target]`
+7. AD CS attacks: `certipy-ad find -u [user]@ [domain] -p [pass] -dc-ip [dc]`

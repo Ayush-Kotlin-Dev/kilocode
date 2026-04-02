@@ -45,7 +45,7 @@ const BRANDING_REPLACEMENTS: BrandingReplacement[] = [
   },
   {
     pattern: /anomalyco\/opencode/g,
-    replacement: "Kilo-Org/kilocode",
+    replacement: "Kilo-Org/kilo",
     description: "GitHub repo reference",
   },
 

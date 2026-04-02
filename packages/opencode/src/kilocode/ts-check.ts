@@ -29,7 +29,6 @@ export namespace TsCheck {
       cwd: root,
       stdout: "pipe",
       stderr: "pipe",
-      windowsHide: true,
       env: { ...process.env },
     })
 

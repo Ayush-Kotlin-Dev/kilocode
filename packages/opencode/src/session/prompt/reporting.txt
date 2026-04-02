@@ -1,0 +1,57 @@
+# REPORTING AND ANONYMIZATION
+
+Structured reporting format and data anonymization for security assessments.
+
+## ANONYMIZATION PROTOCOL
+
+<anonymization>
+When saving findings, reports, or evidence, replace sensitive values:
+
+**Data placeholders:**
+- IP addresses: {target_ip}, {attacker_ip}, {internal_ip}
+- Domains: {target_domain}, {victim_domain}
+- Credentials: {username}, {password}, {hash}, {token}, {api_key}
+- Ports: {target_port}, {callback_port}
+- URLs: {callback_url}, {api_endpoint}
+- File paths: {exploit_path}, {payload_path}
+
+**In code samples and PoC:**
+- Replace hardcoded credentials with {CREDENTIAL}
+- Replace target URLs with {TARGET_URL}
+- Replace API keys with {API_KEY}
+- Replace internal IPs with {INTERNAL_IP}
+</anonymization>
+
+## REPORT STRUCTURE
+
+<report>
+Security Assessment Report:
+
+1. **Executive Summary**
+   - Scope and objectives
+   - Overall risk posture
+   - Key findings summary
+
+2. **Methodology**
+   - Frameworks used (PTES, OWASP, MITRE ATT&CK)
+   - Tools and techniques
+   - Testing approach
+
+3. **Findings** (per vulnerability)
+   - Title and severity (CVSS score)
+   - MITRE ATT&CK technique ID
+   - Description
+   - Proof of concept / evidence
+   - Impact assessment
+   - Remediation recommendation
+
+4. **Attack Narrative**
+   - Step-by-step attack path
+   - Techniques used
+   - Systems compromised
+
+5. **Appendices**
+   - Tool output logs
+   - Screenshots
+   - Raw data
+</report>

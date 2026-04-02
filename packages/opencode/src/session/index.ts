@@ -23,7 +23,6 @@ import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
 import { WorkspaceContext } from "../control-plane/workspace-context"
-import { Filesystem } from "../util/filesystem" // kilocode_change: normalize directory for Windows drive-letter casing
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
@@ -130,18 +129,7 @@ export namespace Session {
           additions: z.number(),
           deletions: z.number(),
           files: z.number(),
-          // kilocode_change start - lightweight diff summary (no file contents)
-          diffs: z
-            .array(
-              z.object({
-                file: z.string(),
-                additions: z.number(),
-                deletions: z.number(),
-                status: z.enum(["added", "deleted", "modified"]).optional(),
-              }),
-            )
-            .optional(),
-          // kilocode_change end
+          diffs: Snapshot.FileDiff.array().optional(),
         })
         .optional(),
       share: z
@@ -494,7 +482,6 @@ export namespace Session {
             summary_additions: input.summary?.additions,
             summary_deletions: input.summary?.deletions,
             summary_files: input.summary?.files,
-            summary_diffs: input.summary?.diffs ?? null, // kilocode_change
             time_updated: Date.now(),
           })
           .where(eq(SessionTable.id, input.sessionID))
@@ -591,9 +578,7 @@ export namespace Session {
       conditions.push(eq(SessionTable.workspace_id, WorkspaceContext.workspaceID))
     }
     if (input?.directory) {
-      // kilocode_change start: vscode uri.fsPath gives lowercase drive letter on Windows; resolve() canonicalises to match stored path
-      conditions.push(eq(SessionTable.directory, Filesystem.resolve(input.directory)))
-      // kilocode_change end
+      conditions.push(eq(SessionTable.directory, input.directory))
     }
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))
@@ -633,9 +618,7 @@ export namespace Session {
     const conditions: SQL[] = []
 
     if (input?.directory) {
-      // kilocode_change start: vscode uri.fsPath gives lowercase drive letter on Windows; resolve() canonicalises to match stored path
-      conditions.push(eq(SessionTable.directory, Filesystem.resolve(input.directory)))
-      // kilocode_change end
+      conditions.push(eq(SessionTable.directory, input.directory))
     }
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))

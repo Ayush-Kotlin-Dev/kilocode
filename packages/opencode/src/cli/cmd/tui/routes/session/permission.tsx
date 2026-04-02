@@ -511,7 +511,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
         </box>
         <box paddingLeft={1}>
           {/* kilocode_change */}
-          <text fg={theme.textMuted}>Tell Kilo what to do differently</text>
+          <text fg={theme.textMuted}>Tell PentestClaw what to do differently</text>
         </box>
       </box>
       <box

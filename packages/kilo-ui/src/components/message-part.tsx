@@ -669,15 +669,6 @@ function isContextGroupTool(part: PartType): part is ToolPart {
 
 function ExaOutput(props: { output?: string }) {
   const links = createMemo(() => urls(props.output))
-  const data = useData()
-
-  const open = (url: string, event: MouseEvent) => {
-    event.stopPropagation()
-    event.preventDefault()
-    const handler = data.openUrl
-    if (handler) return handler(url)
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
 
   return (
     <Show when={links().length > 0}>
@@ -685,7 +676,13 @@ function ExaOutput(props: { output?: string }) {
         <div data-slot="exa-tool-links">
           <For each={links()}>
             {(url) => (
-              <a data-slot="exa-tool-link" href={url} target="_blank" rel="noopener noreferrer" onClick={[open, url]}>
+              <a
+                data-slot="exa-tool-link"
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
                 {url}
               </a>
             )}

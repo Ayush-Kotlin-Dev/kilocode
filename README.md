@@ -1,108 +1,133 @@
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=kilocode.Kilo-Code"><img src="https://raster.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
-  <a href="https://x.com/kilocode"><img src="https://raster.shields.io/badge/kilocode-000000?style=flat&logo=x&logoColor=white" alt="X (Twitter)"></a>
-  <a href="https://blog.kilo.ai"><img src="https://raster.shields.io/badge/Blog-555?style=flat&logo=substack&logoColor=white" alt="Substack Blog"></a>
-  <a href="https://kilo.ai/discord"><img src="https://raster.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://www.reddit.com/r/kilocode/"><img src="https://raster.shields.io/badge/Join%20r%2Fkilocode-D84315?style=flat&logo=reddit&logoColor=white" alt="Reddit"></a>
+  <a href="https://github.com/ayush/pentAGI/stargazers"><img src="https://raster.shields.io/github/stars/ayush/pentAGI?style=flat&logo=github" alt="GitHub Stars"></a>
+  <a href="https://github.com/ayush/pentAGI/blob/main/LICENSE"><img src="https://raster.shields.io/badge/License-MIT-green?style=flat" alt="MIT License"></a>
 </p>
 
-# 🚀 Kilo
+# 🐾 PentAGI
 
-> Kilo is the all-in-one agentic engineering platform. Build, ship, and iterate faster with the most popular open source coding agent.
-> [#1 coding agent on OpenRouter](https://openrouter.ai/apps/category/coding). 1.5M+ Kilo Coders. 25T+ tokens processed
+> PentAGI is an autonomous penetration testing platform built from a hardened fork of Kilo CLI. It combines agentic AI with offensive security tooling to automate reconnaissance, vulnerability analysis, exploitation, post-exploitation, and reporting on macOS.
 
-- ✨ Generate code from natural language
-- ✅ Checks its own work
-- 🧪 Run terminal commands
-- 🌐 Automate the browser
-- ⚡ Inline autocomplete suggestions
-- 🤖 Latest AI models
-- 🎁 API keys optional
-- 💡 **Get $20 in bonus credits when you top-up for the first time** Credits can be used with 500+ models like Gemini 3.1 Pro, Claude 4.6 Sonnet & Opus, and GPT-5.2
+- 🎯 **Automated Pentesting** -- Full PTES/OWASP methodology execution
+- 🔓 **Exploit Development** -- Shellcode, ROP chains, buffer overflow workflows
+- 🌐 **Active Directory Testing** -- Kerberoasting, DCSync, BloodHound path analysis
+- 🛡️ **Red Team Operations** -- C2 frameworks, tunneling, credential attacks
+- 📊 **Structured Reporting** -- CVSS scoring, MITRE ATT&CK mapping, anonymized reports
+- 💻 **macOS Native** -- Built for Darwin, uses Homebrew for tool management
+- 🤖 **AI-Powered** -- Uses OpenAI & Kilo Gateway models for intelligent decision-making
 
-## Quick Links
+## Quick Start
 
-- [VS Code Marketplace](https://kilo.ai/vscode-marketplace?utm_source=Readme) (download)
-- Install CLI: `npm install -g @kilocode/cli`
-- [Official Kilo.ai Home page](https://kilo.ai) (learn more)
+### Prerequisites
+
+- macOS (Darwin)
+- [Bun](https://bun.sh) runtime
+- [Homebrew](https://brew.sh) for security tool installation
+
+### Install Bun
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Clone & Run
+
+```bash
+git clone https://github.com/ayush/pentAGI.git
+cd pentAGI
+bun install
+bun run dev
+```
+
+Then run `kilo` in any project directory to start the PentAGI TUI.
 
 ## Key Features
 
-- **Code Generation:** Kilo can generate code using natural language.
-- **Inline Autocomplete:** Get intelligent code completions as you type, powered by AI.
-- **Task Automation:** Kilo can automate repetitive coding tasks to save time.
-- **Automated Refactoring:** Kilo can refactor and improve existing code efficiently.
-- **MCP Server Marketplace**: Kilo can easily find, and use MCP servers to extend the agent capabilities.
-- **Multi Mode**: Plan with Architect, Code with Coder, and Debug with Debugger, and make your own custom modes.
+- **Reconnaissance** -- OSINT, DNS enumeration, subdomain discovery, port scanning, service enumeration
+- **Vulnerability Analysis** -- nmap NSE, nuclei, nikto, sqlmap, commix, ffuf, manual verification
+- **Exploitation** -- Metasploit, custom scripts, password attacks, web exploitation
+- **Post-Exploitation** -- Credential access, AD testing, pivoting, persistence, C2 operations
+- **Active Directory** -- Responder, impacket, BloodHound, certipy, Kerberoasting, DCSync
+- **Red Team Ops** -- PowerShell Empire, Weevely, hash cracking, tunneling (DNS/ICMP/SSL)
+- **Exploit Dev** -- radare2, msfvenom, ROPgadget, pattern_create/offset, bad char analysis
+- **Threat Modeling** -- STRIDE methodology, attack surface analysis
+- **Risk Assessment** -- CVSS v3.1 scoring, MITRE ATT&CK mapping, risk prioritization
+- **Reporting** -- Structured reports with anonymization protocol
 
-## Get Started in Visual Studio Code
+## Security Tool Inventory
 
-1. Install the Kilo Code extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=kilocode.Kilo-Code).
-2. Create your account to access 500+ cutting-edge AI models including Gemini 3 Pro, Claude 4.5 Sonnet & Opus, and GPT-5 – with transparent pricing that matches provider rates exactly.
-3. Start coding with AI that adapts to your workflow. Watch our quick-start guide to see Kilo in action:
+PentAGI can install and use 70+ security tools via Homebrew:
 
-[![Watch the video](https://img.youtube.com/vi/pqGfYXgrhig/maxresdefault.jpg)](https://youtu.be/pqGfYXgrhig)
+| Category            | Tools                                                                   |
+| ------------------- | ----------------------------------------------------------------------- |
+| Network Recon       | nmap, masscan, amass, subfinder, dnsx, assetfinder, fierce              |
+| Web Testing         | gobuster, ffuf, nikto, sqlmap, nuclei, katana, wpscan, commix           |
+| Password Attacks    | hydra, john, hashcat, crunch, medusa, hashid                            |
+| Exploitation        | metasploit, msfvenom, searchsploit                                      |
+| Post-Exploit        | proxychains4, chisel, responder, netexec, evil-winrm, bloodhound-python |
+| C2 Frameworks       | powershell-empire, weevely                                              |
+| Traffic Analysis    | tshark, tcpdump, mitmproxy, sslscan                                     |
+| Reverse Engineering | radare2, ROPgadget, binwalk, ropper                                     |
+| Tunneling           | iodine (DNS), ptunnel (ICMP), stunnel4                                  |
+| OSINT               | shodan CLI, censys CLI, seclists                                        |
 
-## Get Started with the CLI
+## AI Providers
 
-```bash
-# npm
-npm install -g @kilocode/cli
+PentAGI supports two AI providers:
 
-# Or run directly with npx
-npx @kilocode/cli
+- **Kilo Gateway** -- Unified access to top models via a single API key
+- **OpenAI** -- Direct OpenAI API access
+
+Configure providers via the TUI (`/connect`) or in `kilo.json`.
+
+## Project Structure
+
+```
+packages/
+├── opencode/          # Core CLI engine (agents, tools, sessions, server, TUI)
+├── sdk/js/            # Auto-generated TypeScript SDK
+├── kilo-gateway/      # Kilo Gateway auth & provider routing
+├── kilo-telemetry/    # Telemetry & analytics
+├── kilo-ui/           # Shared component library
+├── kilo-i18n/         # Internationalization
+└── kilo-docs/         # Documentation
 ```
 
-Then run `kilo` in any project directory to start.
+## Pentesting System Prompts
 
-<!-- kilocode_change start -->
+PentAGI uses modular system prompt files for specialized capabilities:
 
-### npm Install Note: Hidden `.kilo` File
+| Prompt File         | Purpose                                                  |
+| ------------------- | -------------------------------------------------------- |
+| `pentester.txt`     | Core pentesting specialist -- auth, tools, methodology   |
+| `ad_specialist.txt` | Active Directory toolkit and attack patterns             |
+| `redteam.txt`       | C2 frameworks, credentials, tunneling, post-exploitation |
+| `exploit_dev.txt`   | Exploit development workflow, shellcode, RE tools        |
+| `msf_ops.txt`       | Metasploit operational patterns and rules                |
+| `threat_model.txt`  | STRIDE, attack surface, CVSS, MITRE ATT&CK               |
+| `reporting.txt`     | Anonymization protocol, report structure                 |
 
-On some systems and npm versions, installing `@kilocode/cli` can create a hidden `.kilo` file near the installed `kilo` command (for example in a global npm bin directory). This file is an npm-generated launcher helper, not project data.
-
-- Why it exists: npm may create helper artifacts while wiring CLI executables.
-- Size caveat: size can vary by platform, npm version, and install mode (symlink vs copied launcher), so a strict fixed size is not guaranteed.
-- Safety: it is safe to leave in place. Do not edit it manually. Use your package manager's uninstall (`npm uninstall -g @kilocode/cli`) to remove install artifacts cleanly.
-<!-- kilocode_change end -->
-
-### Install from GitHub Releases (Optional)
-
-Download the latest binary or source code from the [Releases page](https://github.com/Kilo-Org/kilocode/releases), use this quick guide:
-
-- `kilo-<os>-<arch>.zip` is the CLI binary for your OS and CPU architecture on Windows and macOS. (`kilo-linux-<arch>.tar.gz` for Linux)
-- `darwin` means macOS.
-- `x64` is standard 64-bit Intel/AMD CPUs.
-- `x64-baseline` is a compatibility build for older x64 CPUs(do not support AVX Instruction).
-- `arm64` is ARM-based Linux/MacOS.
-- `musl` is statically linked Linux build for Alpine/minimal Docker without glibc. Alpine/minimal Docker users should prefer the matching \*-musl asset.
-- `kilo-vscode-*.vsix` is the VS Code extension package and not the CLI binary.
-- `Source code` releases are for building from source, not normal installation.
-
-For most users:
-
-- **Windows (most PCs):** `kilo-windows-x64.zip`
-- **macOS Apple Silicon:** `kilo-darwin-arm64.zip`
-- **macOS Intel:** `kilo-darwin-x64.zip`
-- **Linux x64:** `kilo-linux-x64.tar.gz`
-- **Linux on ARM:** `kilo-linux-arm64.tar.gz`
-
-### Autonomous Mode (CI/CD)
-
-Use the `--auto` flag with `kilo run` to enable fully autonomous operation without user interaction. This is ideal for CI/CD pipelines and automated workflows:
+## Development
 
 ```bash
-kilo run --auto "run tests and fix any failures"
-```
+# Dev mode (TUI)
+bun run dev
 
-**Important:** The `--auto` flag disables all permission prompts and allows the agent to execute any action without confirmation. Only use this in trusted environments like CI/CD pipelines.
+# Typecheck
+bun run typecheck
+```
 
 ## Contributing
 
-We welcome contributions from developers, writers, and enthusiasts!
-To get started, please read our [Contributing Guide](/CONTRIBUTING.md). It includes details on setting up your environment, coding standards, types of contribution and how to submit pull requests.
+We welcome contributions from security researchers and developers!
+To get started:
 
-See [RELEASING.md](RELEASING.md) for the release process.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `bun run typecheck` to verify
+5. Submit a pull request
 
 ## Code of Conduct
 
@@ -111,8 +136,14 @@ Our community is built on respect, inclusivity, and collaboration. Please review
 ## License
 
 This project is licensed under the MIT License.
-You’re free to use, modify, and distribute this code, including for commercial purposes as long as you include proper attribution and license notices. See [License](/LICENSE).
+You're free to use, modify, and distribute this code, including for commercial purposes as long as you include proper attribution and license notices. See [License](/LICENSE).
 
-### Where did Kilo CLI come from?
+---
 
-Kilo CLI is a fork of [OpenCode](https://github.com/anomalyco/opencode), enhanced to work within the Kilo agentic engineering platform.
+### Credits
+
+PentAGI is a fork of [Kilo Code](https://github.com/Kilo-Org/kilocode) -- an open-source agentic coding platform.
+The core CLI, TUI, session management, and AI agent infrastructure are built by the [Kilo-Org](https://github.com/Kilo-Org) community.
+PentAGI extends Kilo Code with penetration testing system prompts, security tool integration, and macOS-specific adaptations for offensive security workflows.
+
+Made with ♥ by Ayush
