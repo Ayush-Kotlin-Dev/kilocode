@@ -33,15 +33,11 @@ jobs:
         working-directory: packages/opencode
         run: bun run build --single
         env:
-          KILO_RELEASE: "1"
           KILO_VERSION: ${{ github.ref_name }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Archive binary
         working-directory: packages/opencode
         run: |
-          ls -la dist/
-          find dist/ -name "kilo" -type f
           if [[ "${{ matrix.target }}" == *"linux"* ]]; then
             cd dist/@kilocode/cli-${{ matrix.target }}/bin
             tar -czf ../../kilo-${{ matrix.target }}.tar.gz kilo
