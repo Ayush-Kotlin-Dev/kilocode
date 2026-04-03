@@ -448,8 +448,20 @@ download_and_install() {
         unzip -q "$archive" -d "$tmp_dir"
     fi
 
+    local bin_path=""
+    if [ -f "$tmp_dir/kilo" ]; then
+        bin_path="$tmp_dir/kilo"
+    elif [ -f "$tmp_dir/bin/kilo" ]; then
+        bin_path="$tmp_dir/bin/kilo"
+    fi
+
+    if [ -z "$bin_path" ]; then
+        echo -e "${RED}Installed archive did not contain a usable kilo binary.${NC}"
+        exit 1
+    fi
+
     # kilocode_change start
-    mv "$tmp_dir/kilo" "$INSTALL_DIR"
+    mv "$bin_path" "$INSTALL_DIR"
     chmod 755 "${INSTALL_DIR}/kilo"
     # kilocode_change end
     rm -rf "$tmp_dir"
