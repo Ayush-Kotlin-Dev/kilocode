@@ -105,8 +105,8 @@ export namespace SystemPrompt {
         `</directories>`,
       ].join("\n"),
     ]
-    // kilocode_change start - add pentesting capabilities for Kali Linux
-    if (process.platform === "linux") {
+    // kilocode_change start - add pentesting capabilities for Linux and macOS
+    if (process.platform === "linux" || process.platform === "darwin") {
       lines.push(SystemPrompt.pentesting())
     }
     // kilocode_change end
