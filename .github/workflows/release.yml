@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Linux binaries
+        working-directory: packages/opencode
+        run: bun run build -- --os=linux
+        env:
+          KILO_VERSION: ${{ github.ref_name }}
+
+      - name: Archive Linux assets
+        working-directory: packages/opencode
+        run: |
+          mkdir -p release
+          for dir in dist/@kilocode/cli-linux-*; do
+            [ -d "$dir" ] || continue
+            name="${dir##*/}"
+            out="${name#@kilocode/}"
+            out="${out/#cli/kilo}"
+            tar -czf "release/${out}.tar.gz" -C "$dir/bin" kilo
+          done
+
+      - name: Attest Linux assets
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: packages/opencode/release/*.tar.gz
+
+      - name: Upload Linux assets
+        uses: actions/upload-artifact@v5
+        with:
+          name: kilo-linux
+          path: packages/opencode/release/*.tar.gz
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build macOS binaries
+        working-directory: packages/opencode
+        run: bun run build -- --os=darwin
+        env:
+          KILO_VERSION: ${{ github.ref_name }}
+
+      - name: Archive macOS assets
+        working-directory: packages/opencode
+        run: |
+          mkdir -p release
+          for dir in dist/@kilocode/cli-darwin-*; do
+            [ -d "$dir" ] || continue
+            name="${dir##*/}"
+            out="${name#@kilocode/}"
+            out="${out/#cli/kilo}"
+            ditto -c -k --sequesterRsrc --keepParent "$dir/bin/kilo" "release/${out}.zip"
+          done
+
+      - name: Attest macOS assets
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: packages/opencode/release/*.zip
+
+      - name: Upload macOS assets
+        uses: actions/upload-artifact@v5
+        with:
+          name: kilo-macos
+          path: packages/opencode/release/*.zip
+          if-no-files-found: error
+
+  release:
+    needs:
+      - build-linux
+      - build-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum * > kilo-checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
