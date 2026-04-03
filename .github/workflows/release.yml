@@ -40,7 +40,8 @@ jobs:
           for dir in dist/@kilocode/cli-linux-*; do
             [ -d "$dir" ] || continue
             name="${dir##*/}"
-            out="${name/@kilocode\/cli/kilo}"
+            out="${name#@kilocode/}"
+            out="${out/#cli/kilo}"
             tar -czf "release/${out}.tar.gz" -C "$dir/bin" kilo
           done
 
@@ -86,7 +87,8 @@ jobs:
           for dir in dist/@kilocode/cli-darwin-*; do
             [ -d "$dir" ] || continue
             name="${dir##*/}"
-            out="${name/@kilocode\/cli/kilo}"
+            out="${name#@kilocode/}"
+            out="${out/#cli/kilo}"
             ditto -c -k --sequesterRsrc --keepParent "$dir/bin/kilo" "release/${out}.zip"
           done
 

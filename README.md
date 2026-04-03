@@ -17,13 +17,53 @@
 
 ## Quick Start
 
-### Prerequisites
+### One-Line Install
 
-- macOS (Darwin)
+Install the latest release with one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash
+```
+
+Install from the `support/kali` branch instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/support/kali/install | bash
+```
+
+What this does:
+
+- downloads the correct macOS or Linux release archive for your machine
+- installs the `kilo` binary to `~/.kilo/bin/kilo`
+- adds `~/.kilo/bin` to your shell `PATH` when possible
+
+After install, open a new terminal or reload your shell, then run:
+
+```bash
+kilo
+```
+
+You can invoke `kilo` from any directory, the same way other global CLIs work.
+
+### Update Or Pin A Version
+
+Install a specific release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash -s -- --version x.y.z
+```
+
+### Run From Source
+
+If you want to run the project from source instead of a release binary:
+
+#### Prerequisites
+
+- macOS or Linux
 - [Bun](https://bun.sh) runtime
-- [Homebrew](https://brew.sh) for security tool installation
+- [Homebrew](https://brew.sh) for security tool installation on macOS
 
-### Install Bun
+#### Install Bun
 
 ```bash
 curl -fsSL https://bun.sh/install | bash
@@ -31,7 +71,7 @@ echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### Clone & Run
+#### Clone & Run
 
 ```bash
 git clone https://github.com/Ayush-Kotlin-Dev/kilocode.git
@@ -41,16 +81,6 @@ bun run dev
 ```
 
 Then run `kilo` in any project directory to start the PentAGI TUI.
-
-### Quick Install (curl)
-
-Once a release is published, install with one command:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash
-```
-
-This downloads the latest release binary to `~/.kilo/bin/kilo` and adds it to your PATH.
 
 ## Key Features
 
