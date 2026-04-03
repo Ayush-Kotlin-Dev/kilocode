@@ -34,13 +34,23 @@ source ~/.zshrc
 ### Clone & Run
 
 ```bash
-git clone https://github.com/ayush/pentAGI.git
-cd pentAGI
+git clone https://github.com/Ayush-Kotlin-Dev/kilocode.git
+cd kilocode
 bun install
 bun run dev
 ```
 
 Then run `kilo` in any project directory to start the PentAGI TUI.
+
+### Quick Install (curl)
+
+Once a release is published, install with one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash
+```
+
+This downloads the latest release binary to `~/.kilo/bin/kilo` and adds it to your PATH.
 
 ## Key Features
 
