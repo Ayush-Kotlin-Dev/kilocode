@@ -35,22 +35,27 @@ jobs:
         env:
           KILO_VERSION: ${{ github.ref_name }}
 
-      - name: Archive binary
+      - name: Archive and upload
         working-directory: packages/opencode
         run: |
+          mkdir -p out
           if [[ "${{ matrix.target }}" == *"linux"* ]]; then
-            cd dist/@kilocode/cli-${{ matrix.target }}/bin
-            tar -czf ../../kilo-${{ matrix.target }}.tar.gz kilo
+            cp dist/@kilocode/cli-${{ matrix.target }}/bin/kilo out/kilo
+            tar -czf out/kilo-${{ matrix.target }}.tar.gz -C out kilo
           else
-            cd dist/@kilocode/cli-${{ matrix.target }}/bin
-            zip ../../kilo-${{ matrix.target }}.zip kilo
+            cp dist/@kilocode/cli-${{ matrix.target }}/bin/kilo out/kilo
+            cd out
+            zip kilo-${{ matrix.target }}.zip kilo
+            cd ..
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: kilo-${{ matrix.target }}
-          path: packages/opencode/dist/kilo-${{ matrix.target }}.*
+          path: |
+            packages/opencode/out/kilo-${{ matrix.target }}.tar.gz
+            packages/opencode/out/kilo-${{ matrix.target }}.zip
           if-no-files-found: ignore
 
   release:
