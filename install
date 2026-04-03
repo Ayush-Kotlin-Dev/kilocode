@@ -21,8 +21,8 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL https://kilo.ai/cli/install | bash
-    curl -fsSL https://kilo.ai/cli/install | bash -s -- --version 1.0.180
+    curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash
+    curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash -s -- --version 1.0.180
     ./install --binary /path/to/kilo
 EOF
 }
@@ -167,7 +167,45 @@ else
       target="$target-musl"
     fi
 
-    filename="$APP-$target$archive_ext"
+    targets=()
+
+    add_target() {
+        local value="$1"
+        local item=""
+        for item in "${targets[@]:-}"; do
+            if [[ "$item" == "$value" ]]; then
+                return
+            fi
+        done
+        targets+=("$value")
+    }
+
+    add_target "$target"
+
+    if [ "$os" = "linux" ] && [ "$arch" = "x64" ]; then
+        if [ "$is_musl" = "true" ] && [ "$needs_baseline" = "true" ]; then
+            add_target "$os-$arch-musl"
+            add_target "$os-$arch-baseline"
+            add_target "$os-$arch"
+        elif [ "$is_musl" = "true" ]; then
+            add_target "$os-$arch"
+        elif [ "$needs_baseline" = "true" ]; then
+            add_target "$os-$arch"
+        fi
+    fi
+
+    if [ "$os" = "linux" ] && [ "$arch" = "arm64" ] && [ "$is_musl" = "true" ]; then
+        add_target "$os-$arch"
+    fi
+
+    if [ "$os" = "darwin" ] && [ "$arch" = "x64" ] && [ "$needs_baseline" = "true" ]; then
+        add_target "$os-$arch"
+    fi
+
+    filenames=()
+    for item in "${targets[@]}"; do
+        filenames+=("$APP-$item$archive_ext")
+    done
 
 
     if [ "$os" = "linux" ]; then
@@ -183,7 +221,6 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        url="https://github.com/Ayush-Kotlin-Dev/kilocode/releases/latest/download/$filename"
         specific_version=$(curl -s https://api.github.com/repos/Ayush-Kotlin-Dev/kilocode/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 
         if [[ $? -ne 0 || -z "$specific_version" ]]; then
@@ -193,7 +230,6 @@ else
     else
         # Strip leading 'v' if present
         requested_version="${requested_version#v}"
-        url="https://github.com/Ayush-Kotlin-Dev/kilocode/releases/download/v${requested_version}/$filename"
         specific_version=$requested_version
 
         # Verify the release exists before downloading
@@ -204,6 +240,8 @@ else
             exit 1
         fi
     fi
+
+    base_url="https://github.com/Ayush-Kotlin-Dev/kilocode/releases/download/v${specific_version}"
 fi
 
 print_message() {
@@ -328,22 +366,86 @@ download_with_progress() {
     return $ret
 }
 
+download_release() {
+    local url="$1"
+    local output="$2"
+
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$output"; then
+        curl -fsSL -o "$output" "$url"
+    fi
+}
+
+verify_release() {
+    local file="$1"
+    local name="$2"
+    local dir="$3"
+    local sums="$dir/kilo-checksums.txt"
+    local url="${base_url}/kilo-checksums.txt"
+    local expected=""
+    local actual=""
+
+    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ! curl -fsSL -o "$sums" "$url"; then
+        print_message warning "${MUTED}Checksum file not found, skipping verification${NC}"
+        return 0
+    fi
+
+    expected=$(grep "[[:space:]]$name\$" "$sums" | awk '{print $1}' | head -n 1)
+    if [ -z "$expected" ]; then
+        print_message warning "${MUTED}Checksum entry missing for ${NC}$name${MUTED}, skipping verification${NC}"
+        return 0
+    fi
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$file" | awk '{print $1}')
+    else
+        actual=$(shasum -a 256 "$file" | awk '{print $1}')
+    fi
+
+    if [ "$actual" != "$expected" ]; then
+        echo -e "${RED}Checksum verification failed for ${name}${NC}"
+        exit 1
+    fi
+}
+
 download_and_install() {
     # kilocode_change start
     print_message info "\n${MUTED}Installing ${NC}Kilo Code ${MUTED}version: ${NC}$specific_version"
     local tmp_dir="${TMPDIR:-/tmp}/kilo_install_$$"
+    local archive=""
+    local name=""
     # kilocode_change end
     mkdir -p "$tmp_dir"
 
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
-        # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
-        curl -f# -L -o "$tmp_dir/$filename" "$url" # kilocode_change
+    for name in "${filenames[@]}"; do
+        local url="${base_url}/${name}"
+        local path="$tmp_dir/$name"
+
+        print_message info "${MUTED}Trying ${NC}$name"
+        if download_release "$url" "$path"; then
+            archive="$path"
+            break
+        fi
+
+        rm -f "$path"
+    done
+
+    if [ -z "$archive" ]; then
+        echo -e "${RED}No release asset matched this system.${NC}"
+        echo -e "${MUTED}Tried:${NC} ${filenames[*]}"
+        echo -e "${MUTED}Release page: ${NC}https://github.com/Ayush-Kotlin-Dev/kilocode/releases/tag/v${specific_version}"
+        exit 1
     fi
 
+    verify_release "$archive" "$name" "$tmp_dir"
+
     if [ "$os" = "linux" ]; then
-        tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
+        tar -xzf "$archive" -C "$tmp_dir"
     else
-        unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
+        unzip -q "$archive" -d "$tmp_dir"
     fi
 
     # kilocode_change start

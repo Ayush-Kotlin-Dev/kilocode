@@ -1,118 +1,79 @@
 # Releasing Kilo Code
 
-Kilo Code uses a fully automated CI pipeline triggered via GitHub Actions `workflow_dispatch`. A single workflow handles version bumping, building all artifacts, publishing to every distribution channel, and updating package registries.
+Releases are created by pushing a version tag such as `v8.3.1`. GitHub Actions builds the supported macOS and Linux binaries, publishes checksums, generates build provenance, and attaches everything to a GitHub Release.
 
-## How to Trigger a Release
+## Trigger
 
-1. Go to the [`publish` workflow](https://github.com/Kilo-Org/kilocode/actions/workflows/publish.yml) in GitHub Actions.
-2. Click **"Run workflow"**.
-3. Select the branch (typically `main`).
-4. Fill in the inputs:
-   - **`bump`** (choice): `patch`, `minor`, or `major`. Determines how the version number is incremented.
-   - **`version`** (string, optional): Override the version explicitly instead of using `bump`. Leave empty to use the bump-based calculation.
+```bash
+git tag v8.3.1
+git push origin v8.3.1
+```
 
-   > **⚠️ Do not fill in `version` unless you have a specific reason to.**
-   > The default behavior — leaving `version` empty and selecting a `bump` level — is almost always what you want. The automated bump logic computes the correct next version from the current state of the repo. Only use the `version` override for exceptional cases like skipping versions or publishing a pre-release (e.g. `1.5.0-beta.1`).
+The active workflow is [`release.yml`](./.github/workflows/release.yml).
 
-5. Click **"Run workflow"** to start the release.
+## What The Workflow Publishes
 
-## What Happens During a Release
+The workflow runs two build jobs and one release job:
 
-The `publish.yml` workflow runs four jobs sequentially:
+- `build-linux` on `ubuntu-latest`
+- `build-macos` on `macos-latest`
+- `release` on `ubuntu-latest`
 
-### 1. Version (`version`)
+### Linux assets
 
-- Checks out the repo with full history (`fetch-depth: 0`).
-- Runs `script/version.ts` to compute the next version based on the `bump` or `version` input.
-- Generates release notes from the commit history since the last release.
-- Creates a **draft** GitHub Release with the computed tag (e.g. `v1.2.3`) and release notes.
-- Outputs the `version`, `release` (database ID), and `tag` for downstream jobs.
+- `kilo-linux-x64.tar.gz`
+- `kilo-linux-x64-baseline.tar.gz`
+- `kilo-linux-arm64.tar.gz`
+- `kilo-linux-x64-musl.tar.gz`
+- `kilo-linux-x64-baseline-musl.tar.gz`
+- `kilo-linux-arm64-musl.tar.gz`
 
-### 2. Build CLI (`build-cli`)
+### macOS assets
 
-- Runs `packages/opencode/script/build.ts` to compile the Kilo CLI binary.
-- Builds native binaries for **all supported platforms and architectures**:
-  - Linux: x64, arm64 (glibc and musl), plus baseline (non-AVX2) variants
-  - macOS: x64, arm64, plus baseline variants
-  - Windows: x64 (plus baseline variant), arm64
-- Patches ELF interpreters on Linux binaries for broad compatibility.
-- Creates platform archives (`.tar.gz` for Linux, `.zip` for macOS/Windows) and uploads them to the draft GitHub Release.
-- Uploads the `dist/` directory as a workflow artifact (`kilo-cli`) for subsequent jobs.
+- `kilo-darwin-arm64.zip`
+- `kilo-darwin-x64.zip`
+- `kilo-darwin-x64-baseline.zip`
 
-### 3. Build VS Code Extension (`build-vscode`)
+### Extra release assets
 
-- Downloads the CLI artifacts from the previous job.
-- Runs `packages/kilo-vscode/script/build.ts` to build VSIX packages for all target platforms:
-  - `linux-x64`, `linux-arm64`, `alpine-x64`, `alpine-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`, `win32-arm64`
-- Each VSIX bundles the platform-specific CLI binary.
-- Uploads the VSIX files as a workflow artifact (`kilo-vscode`).
+- `kilo-checksums.txt`
+- GitHub build provenance attestations for the archived binaries
 
-### 4. Publish (`publish`)
+## Installer
 
-Downloads all build artifacts and publishes to every distribution channel:
+Users can install with a one-line command:
 
-#### Version Commit and Tagging
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash
+```
 
-- Updates the `version` field in all `package.json` files across the monorepo.
-- Updates the Zed extension manifest (`extension.toml`) with the new version.
-- Rebuilds the TypeScript SDK (`packages/sdk/js`).
-- Commits the version bump, tags the commit, and pushes to the repo.
-- Promotes the draft GitHub Release to a published release.
+To install from a non-default branch:
 
-#### CLI (`@kilocode/cli`)
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/support/kali/install | bash
+```
 
-- Publishes platform-specific binary packages to **npm** (e.g. `@kilocode/cli-linux-x64`, `@kilocode/cli-darwin-arm64`, etc.).
-- Publishes the main `@kilocode/cli` package to **npm** with optional dependencies on the binary packages.
-- Builds and pushes a multi-arch **Docker image** (`ghcr.io/kilo-org/kilo`) to GitHub Container Registry (linux/amd64 + linux/arm64).
+The installer:
 
-#### SDK (`@kilocode/sdk`)
+- detects the current platform and CPU
+- prefers the most specific asset for the machine
+- falls back to a compatible asset when a variant is unavailable
+- verifies the archive against `kilo-checksums.txt` when checksum tools are present
+- installs `kilo` into `$HOME/.kilo/bin`
+- adds `$HOME/.kilo/bin` to the shell `PATH` when possible
 
-- Builds and publishes the TypeScript SDK to **npm**.
+## Current GitHub Actions Setup
 
-#### Plugin (`@kilocode/plugin`)
+The workflow uses current major versions of the main release actions:
 
-- Builds and publishes the plugin interface package to **npm**.
+- `actions/checkout@v6`
+- `actions/upload-artifact@v5`
+- `actions/download-artifact@v5`
+- `softprops/action-gh-release@v2`
+- `actions/attest-build-provenance@v3`
 
-#### VS Code Extension
+## Notes
 
-- Publishes platform-specific VSIX packages to the **VS Code Marketplace** via `vsce`.
-- Uploads all VSIX files to the **GitHub Release** as assets.
-
-#### Package Registries (stable releases only)
-
-- **AUR (Arch Linux)**: Clones `kilo-bin` from the AUR, updates the `PKGBUILD` with new version and SHA256 checksums, and pushes.
-- **Homebrew**: Clones `Kilo-Org/homebrew-tap`, updates the `kilo.rb` formula with new version, download URLs, and SHA256 checksums, and pushes.
-
-## Prerequisites and Permissions
-
-### Repository Access
-
-- The workflow only runs in the `Kilo-Org/kilocode` repository (guarded by `if: github.repository == 'Kilo-Org/kilocode'`).
-- You must have **write access** to the repository to trigger a `workflow_dispatch` event.
-
-### Workflow Permissions
-
-The workflow requires these GitHub token permissions:
-
-- `id-token: write` -- for npm provenance attestation
-- `contents: write` -- for creating releases, pushing tags, and uploading assets
-- `packages: write` -- for publishing Docker images to GHCR
-
-### Required Secrets
-
-The following secrets must be configured in the repository:
-
-| Secret                       | Purpose                                                          |
-| ---------------------------- | ---------------------------------------------------------------- |
-| `KILO_API_KEY`               | Kilo API key used during version computation                     |
-| `KILO_ORG_ID`                | Kilo organization ID                                             |
-| `KILO_MAINTAINER_APP_ID`     | GitHub App ID for the kilo-maintainer bot (used for git commits) |
-| `KILO_MAINTAINER_APP_SECRET` | GitHub App secret for the kilo-maintainer bot                    |
-| `NPM_TOKEN`                  | npm authentication token for publishing packages                 |
-| `VSCE_TOKEN`                 | VS Code Marketplace personal access token                        |
-| `OVSX_TOKEN`                 | Open VSX Registry token (currently unused but configured)        |
-| `AUR_KEY`                    | SSH private key for pushing to the AUR                           |
-
-### Concurrency
-
-The workflow uses concurrency control (`workflow-ref-bump/version`) to prevent parallel releases from conflicting.
+- Releases are tag-driven, not `workflow_dispatch`-driven.
+- The workflow is focused on GitHub Releases and curl-based installs.
+- Package registry publishing such as npm, Homebrew, Docker, or AUR is not part of the current release workflow.
