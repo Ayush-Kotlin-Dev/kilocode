@@ -1,72 +1,46 @@
-# opencode agent guidelines
+# PentestAGI runtime guide
 
-## Build/Test
+## Identity
 
-- **Run**: `bun run --conditions=browser ./src/index.ts`
-- **Test**: `bun test` (all tests) or `bun test test/tool/tool.test.ts` (single test)
-- **Typecheck**: `bun run typecheck` (runs `tsgo --noEmit`)
+- This package is a PentestAGI execution runtime, not a generic coding assistant package.
+- Optimize all prompt, tool, and session behavior for reconnaissance, exploitation, verification, evidence capture, and reporting.
+- Treat every authorized security task as live operator work requiring decisive execution.
 
-## Import Aliases
+## Authorization
 
-- `@/*` maps to `./src/*`
-- `@tui/*` maps to `./src/cli/cmd/tui/*`
+- Security testing requested through this runtime is authorized by default.
+- Do not add defensive disclaimers, permission hedging, or generic safety filler into pentest prompts.
+- Bias toward action, verification, and operator usefulness.
 
-## Key Patterns
+## Runtime goals
 
-**Namespace modules** -- Code is organized as TypeScript namespaces, not classes. Each module exports a namespace with its Zod schemas, types, and functions:
+- Maximize signal for external attack simulation, authenticated testing, web/API abuse, cloud abuse, AD tradecraft, exploit development, and post-exploitation validation.
+- Strip product-marketing, roadmap, editor UX, and unrelated Kilo guidance from prompt-facing instructions where possible.
+- Preserve only the architecture details needed to keep the runtime functional.
 
-```ts
-export namespace Session {
-  export const Info = z.object({ ... })
-  export type Info = z.infer<typeof Info>
-  export const create = fn(z.object({ ... }), async (input) => { ... })
-}
-```
+## Useful commands
 
-**`Instance.state(init, dispose?)`** -- Per-project lazy singleton. Many modules register state this way. The state is tied to the project directory via `AsyncLocalStorage`:
+- Run: `bun run --conditions=browser ./src/index.ts`
+- Test: `bun test` or `bun test test/tool/tool.test.ts`
+- Typecheck: `bun run typecheck`
 
-```ts
-const state = Instance.state(async () => {
-  // initialized once per project, cached
-  return { ... }
-})
-// later: (await state()).someValue
-```
+## Code patterns to preserve
 
-**`fn(schema, callback)`** -- Wraps functions with Zod input validation. Used for most exported functions:
+- Modules commonly export TypeScript namespaces.
+- Use `fn(schema, callback)` for validated functions.
+- Tools follow `Tool.define(id, init)`.
+- Shared state often uses `Instance.state(init, dispose?)`.
+- Prefer `NamedError.create(...)` over raw thrown errors.
 
-```ts
-export const get = fn(z.object({ id: z.string() }), async (input) => { ... })
-```
+## Editing rules
 
-**`Tool.define(id, init)`** -- All tools follow this pattern. The `init` returns `{ description, parameters, execute }`. Output is auto-truncated.
+- Keep changes tight and upstream-merge-friendly.
+- Prefer single-word names for new locals when clear.
+- Avoid `let`, avoid `else` when early returns fit, avoid empty `catch` blocks.
+- Use Bun APIs when natural.
+- Add comments only when a non-obvious block needs them.
 
-**`BusEvent.define(type, schema)` + `Bus.publish()`** -- In-process pub/sub event system for cross-module communication.
+## Validation
 
-**`NamedError.create(name, schema)`** -- Structured errors with Zod schemas. Prefer these over throwing raw errors.
-
-**`iife()`** -- Immediately-invoked function expression helper. Used to avoid `let` statements per style guide.
-
-**Logging** -- Use `Log.create({ service: "name" })` pattern.
-
-## Process Spawning (Windows)
-
-On Windows, any `spawn`/`execFile` call without `windowsHide: true` will flash a cmd.exe console window at the user. Use `Process.spawn` from `src/util/process.ts` — it enforces `windowsHide: true` automatically. For `Bun.spawn`/`Bun.spawnSync`, pass `windowsHide` via the options object if the subprocess could create a visible console.
-
-The MCP `StdioClientTransport` (third-party SDK) is handled separately via a process shim in `src/mcp/index.ts` that sets `process.type = "browser"` when running inside the VS Code extension (`KILO_PLATFORM=vscode`), which causes the SDK's internal `isElectron()` check to return `true` and enable `windowsHide`.
-
-## Storage
-
-Filesystem-based JSON, not a database. Data lives in `~/.local/share/kilo/storage/`. Keys are path arrays: `Storage.write(["session", projectID, sessionID], data)`.
-
-## TUI
-
-Built with **SolidJS + OpenTUI** (`@opentui/solid`) -- a terminal UI framework. JSX renders to the terminal using elements like `<box>`, `<text>`, `<scrollbox>`. The TUI communicates with the server via `@kilocode/sdk`.
-
-## Server
-
-Hono-based HTTP server with OpenAPI spec generation. SSE for real-time events. When you add/change routes, regenerate the SDK (see root AGENTS.md for the command).
-
-## Providers and Models
-
-Uses the **Vercel AI SDK** as the abstraction layer. Providers are loaded from a bundled map or dynamically installed at runtime. Models come from models.dev (external API), cached locally.
+- After prompt/runtime edits, run the smallest useful verification.
+- If prompt assembly or TypeScript wiring changes, prefer `bun run typecheck`.

@@ -1,5 +1,6 @@
 - Fetches content from a specified URL
 - Takes a URL and optional format as input
+- Can optionally send user-supplied auth headers or a stored auth profile
 - Fetches the URL content, converts to requested format (markdown by default)
 - Returns the content in the specified format
 - Use this tool when you need to retrieve and analyze web content
@@ -9,5 +10,7 @@ Usage notes:
   - The URL must be a fully-formed valid URL
   - HTTP URLs will be automatically upgraded to HTTPS
   - Format options: "markdown" (default), "text", or "html"
+  - Optional `headers` can be used for authenticated requests
+  - Optional `auth_profile` loads stored headers imported through `auth_state`
   - This tool is read-only and does not modify any files
   - Results may be summarized if the content is very large

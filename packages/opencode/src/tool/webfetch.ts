@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
+import { AuthState } from "@/kilocode/auth-state"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_TIMEOUT = 30 * 1000 // 30 seconds
@@ -17,12 +18,22 @@ export const WebFetchTool = Tool.define("webfetch", {
       .default("markdown")
       .describe("The format to return the content in (text, markdown, or html). Defaults to markdown."),
     timeout: z.number().describe("Optional timeout in seconds (max 120)").optional(),
+    headers: z.record(z.string(), z.string()).optional().describe("Optional request headers such as Authorization or Cookie"),
+    auth_profile: z
+      .string()
+      .optional()
+      .describe("Optional stored auth profile ID or host to merge into the request"),
   }),
   async execute(params, ctx) {
     // Validate URL
     if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
       throw new Error("URL must start with http:// or https://")
     }
+
+    const profile = params.auth_profile ? await AuthState.resolve(params.url, params.auth_profile) : undefined
+    const authHeaders = profile?.headers ?? {}
+    const extraHeaders = params.headers ?? {}
+    const headerNames = [...new Set([...Object.keys(authHeaders), ...Object.keys(extraHeaders)])]
 
     await ctx.ask({
       permission: "webfetch",
@@ -32,6 +43,8 @@ export const WebFetchTool = Tool.define("webfetch", {
         url: params.url,
         format: params.format,
         timeout: params.timeout,
+        authProfile: profile?.id,
+        headerNames,
       },
     })
 
@@ -60,6 +73,8 @@ export const WebFetchTool = Tool.define("webfetch", {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
       Accept: acceptHeader,
       "Accept-Language": "en-US,en;q=0.9",
+      ...authHeaders,
+      ...extraHeaders,
     }
 
     const initial = await fetch(params.url, { signal, headers })

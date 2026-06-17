@@ -1,0 +1,15 @@
+Use this tool to run and compare multiple HTTP/API requests during scoped testing.
+
+This tool is for control comparisons such as:
+- unauthenticated vs authenticated
+- user role A vs user role B
+- object A vs object B
+- baseline request vs tampered request
+
+Use it when you need structured evidence that a response changed in a security-relevant way.
+
+Important behavior:
+- Each request can reuse stored auth via `auth_profile` or send explicit headers.
+- Non-2xx responses are preserved as evidence.
+- JSON bodies are parsed and compared by path when possible.
+- Prefer this tool for authz, business-logic, and trust-boundary validation.

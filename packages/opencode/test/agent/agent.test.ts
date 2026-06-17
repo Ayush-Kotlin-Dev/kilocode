@@ -21,6 +21,7 @@ test("returns default native agents when no config", async () => {
       expect(names).toContain("code") // kilocode_change
       expect(names).toContain("plan")
       expect(names).toContain("debug") // kilocode_change
+      expect(names).toContain("pentest")
       expect(names).toContain("orchestrator") // kilocode_change
       expect(names).toContain("ask") // kilocode_change
       expect(names).toContain("general")
@@ -48,6 +49,29 @@ test("code agent has correct default properties", async () => {
   })
 })
 // kilocode_change end
+
+test("pentest agent trims low-signal tools but keeps pentest state and shell access", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const pentest = await Agent.get("pentest")
+      expect(pentest).toBeDefined()
+      expect(pentest?.mode).toBe("primary")
+      expect(pentest?.native).toBe(true)
+      expect(pentest?.prompt).toContain("Kali/Linux execution specialist")
+      expect(evalPerm(pentest, "read")).toBe("allow")
+      expect(evalPerm(pentest, "webfetch")).toBe("allow")
+      expect(evalPerm(pentest, "pentest_state")).toBe("allow")
+      expect(evalPerm(pentest, "auth_state")).toBe("allow")
+      expect(evalPerm(pentest, "task")).toBe("deny")
+      expect(evalPerm(pentest, "skill")).toBe("deny")
+      expect(evalPerm(pentest, "todoread")).toBe("deny")
+      expect(evalPerm(pentest, "todowrite")).toBe("deny")
+      expect(evalPerm(pentest, "bash")).toBe("ask")
+    },
+  })
+})
 
 // kilocode_change start - ask agent tests
 test("ask agent has correct default properties", async () => {

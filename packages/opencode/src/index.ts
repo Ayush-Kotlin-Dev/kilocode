@@ -111,27 +111,34 @@ let cli = yargs(hideBin(process.argv))
     })
 
     // kilocode_change start - Initialize telemetry
+    Log.Default.info("telemetry", { step: "getting global config" })
     const globalCfg = await Config.getGlobal()
+    Log.Default.info("telemetry", { step: "initializing telemetry" })
     await Telemetry.init({
       dataPath: Global.Path.data,
       version: Installation.VERSION,
       enabled: globalCfg.experimental?.openTelemetry !== false,
     })
 
+    Log.Default.info("telemetry", { step: "migrating legacy auth" })
     // Migrate legacy Kilo CLI auth if needed
     await migrateLegacyKiloAuth(
       async () => (await Auth.get("kilo")) !== undefined,
       async (auth) => Auth.set("kilo", auth),
     )
 
+    Log.Default.info("telemetry", { step: "getting kilo auth" })
     const kiloAuth = await Auth.get("kilo")
     if (kiloAuth) {
+      Log.Default.info("telemetry", { step: "updating identity" })
       const token = kiloAuth.type === "oauth" ? kiloAuth.access : kiloAuth.key
       const accountId = kiloAuth.type === "oauth" ? kiloAuth.accountId : undefined
       await Telemetry.updateIdentity(token, accountId)
     }
 
+    Log.Default.info("telemetry", { step: "tracking cli start" })
     Telemetry.trackCliStart()
+    Log.Default.info("telemetry", { step: "completed telemetry section" })
     // kilocode_change end
 
     const marker = path.join(Global.Path.data, "kilo.db")

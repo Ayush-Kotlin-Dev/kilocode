@@ -1,0 +1,13 @@
+Use this tool for method-aware HTTP and API requests during scoped testing.
+
+This tool is for controlled request/response validation against web apps and APIs.
+Use it when you need:
+- `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, or `OPTIONS`
+- authenticated requests using stored `auth_state` profiles or explicit headers
+- raw status-code and body comparison, including non-2xx responses
+- evidence for authz, business-logic, and trust-boundary testing
+
+Important behavior:
+- Unlike `webfetch`, non-2xx responses are returned as evidence instead of being treated as hard errors.
+- Supply request bodies as raw strings. Set `Content-Type` explicitly when needed, or let the tool infer JSON for obvious JSON payloads.
+- Prefer this tool over `webfetch` for APIs, mutations, replayed browser calls, and control tests.

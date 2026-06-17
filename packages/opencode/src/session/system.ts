@@ -34,7 +34,14 @@ export namespace SystemPrompt {
     return SOUL.trim()
   }
 
+  export function codex() {
+    return [SystemPrompt.soul(), SystemPrompt.instructions(), SystemPrompt.pentesting()].join("\n\n").trim()
+  }
+
   export function pentesting() {
+    if (process.env.KILO_MINIMAL_PROMPT === "1" || process.env.KILO_MINIMAL_PROMPT === "true") {
+      return "You are an elite penetration testing assistant."
+    }
     return [
       PROMPT_PENTESTER,
       PROMPT_AD_SPECIALIST,
@@ -89,8 +96,8 @@ export namespace SystemPrompt {
         `  Working directory: ${Instance.directory}`,
         `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
         `  Platform: ${process.platform}`,
-        `  Project config: .kilo/command/*.md, .kilo/agent/*.md, kilo.json, AGENTS.md. Put new commands and agents in .kilo/. Do not use .kilocode/ or .opencode/.`, // kilocode_change
-        `  Global config: ${Global.Path.config}/ (same structure)`, // kilocode_change
+        `  Project instructions: AGENTS.md plus optional project command/agent config files`, // kilocode_change
+        `  Global instructions directory: ${Global.Path.config}/`, // kilocode_change
         ...staticEnvLines(editorContext), // kilocode_change
         `</env>`,
         `<directories>`,
@@ -105,11 +112,6 @@ export namespace SystemPrompt {
         `</directories>`,
       ].join("\n"),
     ]
-    // kilocode_change start - add pentesting capabilities for Linux and macOS
-    if (process.platform === "linux" || process.platform === "darwin") {
-      lines.push(SystemPrompt.pentesting())
-    }
-    // kilocode_change end
     return lines
   }
 }

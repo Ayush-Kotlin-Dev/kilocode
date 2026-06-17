@@ -16,6 +16,7 @@ import PROMPT_ASK from "./prompt/ask.txt"
 import PROMPT_ORCHESTRATOR from "./prompt/orchestrator.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_PENTESTER_LINUX from "../session/prompt/pentester_linux.txt"
 
 import { PermissionNext } from "@/permission/next"
 import { NamedError } from "@opencode-ai/util/error" // kilocode_change
@@ -187,6 +188,29 @@ export namespace Agent {
             plan_enter: "allow",
           }),
           user,
+        ),
+        mode: "primary",
+        native: true,
+      },
+      pentest: {
+        name: "pentest",
+        description:
+          "Pentest operator mode with a reduced tool surface for scoped validation, evidence capture, and targeted fixes.",
+        prompt: PROMPT_PENTESTER_LINUX,
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          user,
+          PermissionNext.fromConfig({
+            question: "allow",
+            plan_enter: "allow",
+            todoread: "deny",
+            todowrite: "deny",
+            task: "deny",
+            skill: "deny",
+            plan_exit: "deny",
+            batch: "deny",
+          }),
         ),
         mode: "primary",
         native: true,

@@ -11,6 +11,7 @@ export async function fetchProfile(token: string): Promise<KilocodeProfile> {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(3000),
   })
 
   if (!response.ok) {
@@ -55,7 +56,10 @@ export async function fetchBalance(token: string, organizationId?: string): Prom
       headers["x-kilocode-organizationid"] = organizationId
     }
 
-    const response = await fetch(`${KILO_API_BASE}/api/profile/balance`, { headers })
+    const response = await fetch(`${KILO_API_BASE}/api/profile/balance`, {
+      headers,
+      signal: AbortSignal.timeout(3000),
+    })
 
     if (!response.ok) {
       console.warn(`Failed to fetch balance: ${response.status}`)
@@ -92,7 +96,10 @@ export async function fetchDefaultModel(token?: string, organizationId?: string)
       headers.Authorization = `Bearer ${token}`
     }
 
-    const response = await fetch(url, { headers })
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(3000),
+    })
 
     if (!response.ok) {
       return token ? DEFAULT_MODEL : DEFAULT_FREE_MODEL

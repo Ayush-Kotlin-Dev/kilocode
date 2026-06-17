@@ -1,0 +1,22 @@
+Use this tool to persist user-supplied authenticated request material for scoped targets.
+
+This tool is for safe auth bootstrapping when the agent needs to call an authenticated API but does not have a token yet.
+Use it with:
+- a header map the user provides directly, or
+- an authenticated request exported from browser DevTools as `Copy as cURL`.
+
+Do not use this tool to scrape browser profiles or harvest live sessions automatically.
+
+Actions:
+- `get`: fetch a single auth profile or the full auth state
+- `list`: list stored auth profiles
+- `summary`: fetch host summary
+- `reset`: clear auth state
+- `upsert`: create or update an auth profile with headers
+- `import_curl`: parse a user-provided curl command and store its headers by host
+- `remove`: delete a stored auth profile
+
+Typical workflow:
+1. Ask the user for `Copy as cURL` from an already-authenticated request in DevTools.
+2. Store it with `import_curl`.
+3. Reuse it with `webfetch` by setting `auth_profile` or passing headers directly.

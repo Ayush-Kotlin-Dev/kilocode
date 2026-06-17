@@ -7,6 +7,57 @@
     "kilo": {
       "options": {},
     },
+    "9router": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "9Router Local Gateway",
+      "options": {
+        "baseURL": "http://localhost:20128/v1"
+      },
+      "models": {
+        "kr/claude-sonnet-4.6": {
+          "tool_call": true,
+          "limit": { "context": 1000000, "output": 64000 }
+        },
+        "kr/claude-opus-4.8": {
+          "reasoning": true,
+          "tool_call": true,
+          "limit": { "context": 1000000, "output": 128000 }
+        },
+        "kr/claude-haiku-4.5": {
+          "tool_call": true,
+          "limit": { "context": 200000, "output": 64000 }
+        },
+        "cmc/Qwen/Qwen3.7-Max": {
+          "reasoning": true,
+          "tool_call": true,
+          "limit": { "context": 1000000, "output": 65536 }
+        },
+        "cmc/deepseek/deepseek-v4-pro": {
+          "reasoning": true,
+          "tool_call": true,
+          "limit": { "context": 1000000, "output": 384000 }
+        },
+        "cmc/moonshotai/Kimi-K2.6": {
+          "reasoning": true,
+          "tool_call": true,
+          "limit": { "context": 262144, "output": 32768 }
+        },
+        "cmc/zai-org/GLM-5.1": {
+          "reasoning": true,
+          "tool_call": true,
+          "limit": { "context": 202752, "output": 16384 }
+        },
+        "cmc/MiniMaxAI/MiniMax-M2.7": {
+          "tool_call": true,
+          "limit": { "context": 204800, "output": 16384 }
+        },
+        "qd/qmodel_latest": {
+          "reasoning": true,
+          "tool_call": true,
+          "limit": { "context": 1000000, "output": 65536 }
+        }
+      }
+    }
   },
   "permission": {
     "edit": {

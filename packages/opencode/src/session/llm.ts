@@ -80,6 +80,7 @@ export namespace LLM {
         // use agent prompt otherwise provider prompt
         // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
         ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : SystemPrompt.provider(input.model)),
+        ...(isCodex ? [] : [SystemPrompt.pentesting()]),
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
@@ -119,7 +120,7 @@ export namespace LLM {
     )
     if (isCodex) {
       // kilocode_change start - prepend soul to codex instructions
-      options.instructions = SystemPrompt.soul() + "\n" + SystemPrompt.instructions()
+      options.instructions = SystemPrompt.codex()
       // kilocode_change end
     }
 
@@ -279,6 +280,9 @@ export namespace LLM {
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {
+    if (process.env.KILO_MINIMAL_PROMPT === "1" || process.env.KILO_MINIMAL_PROMPT === "true") {
+      return {}
+    }
     const disabled = PermissionNext.disabled(Object.keys(input.tools), input.agent.permission)
     for (const tool of Object.keys(input.tools)) {
       if (input.user.tools?.[tool] === false || disabled.has(tool)) {

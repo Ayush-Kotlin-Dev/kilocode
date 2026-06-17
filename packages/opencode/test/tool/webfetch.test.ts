@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { WebFetchTool } from "../../src/tool/webfetch"
+import { AuthStateTool } from "../../src/tool/auth_state"
+import { tmpdir } from "../fixture/fixture"
 
 const projectRoot = path.join(import.meta.dir, "../..")
 
@@ -92,6 +94,82 @@ describe("tool.webfetch", () => {
             const result = await webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx)
             expect(result.output).toBe("hello from webfetch")
             expect(result.attachments).toBeUndefined()
+          },
+        })
+      },
+    )
+  })
+
+  test("sends explicit auth headers", async () => {
+    let seen: Headers | undefined
+    await withFetch(
+      async (_input, init) => {
+        seen = new Headers(init?.headers)
+        return new Response("ok", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            await webfetch.execute(
+              {
+                url: "https://example.com/private",
+                format: "text",
+                headers: {
+                  Authorization: "Bearer abc123",
+                },
+              },
+              ctx,
+            )
+            expect(seen?.get("Authorization")).toBe("Bearer abc123")
+          },
+        })
+      },
+    )
+  })
+
+  test("loads stored auth profile headers", async () => {
+    let seen: Headers | undefined
+    await withFetch(
+      async (_input, init) => {
+        seen = new Headers(init?.headers)
+        return new Response("ok", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        })
+      },
+      async () => {
+        await using tmp = await tmpdir({})
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const auth = await AuthStateTool.init()
+            await auth.execute(
+              {
+                action: "upsert",
+                host: "example.com",
+                headers: {
+                  Authorization: "Bearer stored-token",
+                  Cookie: "sid=stored",
+                },
+              },
+              ctx,
+            )
+            const webfetch = await WebFetchTool.init()
+            await webfetch.execute(
+              {
+                url: "https://example.com/private",
+                format: "text",
+                auth_profile: "example.com",
+              },
+              ctx,
+            )
+            expect(seen?.get("Authorization")).toBe("Bearer stored-token")
+            expect(seen?.get("Cookie")).toBe("sid=stored")
           },
         })
       },

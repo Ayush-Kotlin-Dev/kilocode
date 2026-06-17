@@ -39,3 +39,35 @@ logs/
 # Telemetry ID
 telemetry-id
 tsconfig.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Local agent / runtime state (per-user, must never be committed to a fork)
+# ---------------------------------------------------------------------------
+.kilo/
+.kilocode/
+.opencode/
+.pentest/
+kilo.json
+
+# ---------------------------------------------------------------------------
+# Pentest engagement artifacts (authorized work, never public)
+# ---------------------------------------------------------------------------
+# Magnific.com authorized engagement
+magnific_test/
+magnific_oauth_dcr_sso_bypass_report.md
+ORIGINAL_DCR_SSO_REPORT.md
+# Freepik authorized engagement
+freepik_oauth_dcr_uri_bypass_report.md
+# CDOE / GGU student-credential recon
+GGU_REPORTS/
+# Parivahan RC lookup tooling
+parivahan_crack.py
+parivahan_fetch.js
+parivahan_fetch.py
+parivahan_lookup.py
+# Z.ai / ZCode CAPTCHA-bypass proxy + test page
+zcode_proxy.ts
+zcode_glm_test.html
+# Ad-hoc engagement scripts
+billing_security_tester.sh
+test-decrypt-response.js

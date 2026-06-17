@@ -9,6 +9,8 @@ import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
+import { HttpRequestTool } from "./http_request"
+import { HttpCompareTool } from "./http_compare"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
@@ -30,6 +32,7 @@ import { Truncate } from "./truncation"
 
 import { ApplyPatchTool } from "./apply_patch"
 import { PentestStateTool } from "./pentest_state"
+import { AuthStateTool } from "./auth_state"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -113,6 +116,8 @@ export namespace ToolRegistry {
       WriteTool,
       TaskTool,
       WebFetchTool,
+      HttpRequestTool,
+      HttpCompareTool,
       TodoWriteTool,
       // TodoReadTool,
       WebSearchTool,
@@ -120,6 +125,7 @@ export namespace ToolRegistry {
       ...(config.experimental?.codebase_search === true ? [CodebaseSearchTool] : []), // kilocode_change
       SkillTool,
       PentestStateTool,
+      AuthStateTool,
       ApplyPatchTool,
       ...(Flag.KILO_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),

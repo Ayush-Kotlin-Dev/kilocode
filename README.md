@@ -121,6 +121,31 @@ PentAGI supports two AI providers:
 
 Configure providers via the TUI (`/connect`) or in `kilo.json`.
 
+## Runtime Defaults
+
+This repo ships with a project-local [`kilo.json`](kilo.json) that sets:
+
+```json
+{
+  "default_agent": "pentest"
+}
+```
+
+That means new sessions in this project start in the pentest-focused agent instead of the generic coding lane.
+You can still switch agents at runtime with `/agents`.
+
+## Authenticated API Workflow
+
+For real web and API testing, use the built-in auth + replay path:
+
+1. Export an already-authenticated browser request as `Copy as cURL`.
+2. Import it into the runtime with `auth_state.import_curl`.
+3. Reuse the stored headers with `http_request` for `GET/POST/PUT/PATCH/DELETE` testing.
+4. Use `http_compare` for baseline-vs-control comparisons such as anonymous vs authenticated or object A vs object B.
+5. Use `webfetch` when you want rendered/read-oriented fetches, and `http_request` when you need raw status/body evidence.
+
+This is the intended path for authz, business-logic, session, quota, billing, and integration testing against live apps and APIs.
+
 ## Project Structure
 
 ```
