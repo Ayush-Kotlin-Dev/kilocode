@@ -1,54 +1,137 @@
-import { Tool } from "./tool"
+import * as Tool from "./tool"
 import DESCRIPTION from "./task.txt"
-import z from "zod"
-import { Session } from "../session"
+import { ToolJsonSchema } from "./json-schema"
+import { BackgroundJob } from "@/background/job"
+import { Bus } from "@/bus"
+import { Session } from "@/session/session"
+import { SessionID, MessageID } from "../session/schema"
 import { MessageV2 } from "../session/message-v2"
-import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
-import { SessionPrompt } from "../session/prompt"
-import { iife } from "@/util/iife"
-import { defer } from "@/util/defer"
-import { Config } from "../config/config"
-import { PermissionNext } from "@/permission/next"
+import { deriveSubagentSessionPermission } from "../agent/subagent-permissions"
+import type { SessionPrompt } from "../session/prompt"
+import { SessionStatus } from "@/session/status"
+import { Config } from "@/config/config"
+import { Provider } from "@/provider/provider" // kilocode_change
+import { KiloTask } from "../kilocode/tool/task" // kilocode_change
+import { KiloCostPropagation } from "../kilocode/session/cost-propagation" // kilocode_change
+import { KiloSessionProcessor } from "../kilocode/session/processor" // kilocode_change
+import { KiloSession } from "../kilocode/session" // kilocode_change
+import { errorMessage } from "@/util/error" // kilocode_change
+import { TuiEvent } from "@/cli/cmd/tui/event"
+import { Cause, Effect, Exit, Option, Schema, Scope } from "effect"
+import { EffectBridge } from "@/effect/bridge"
+import { RuntimeFlags } from "@/effect/runtime-flags"
 
-const parameters = z.object({
-  description: z.string().describe("A short (3-5 words) description of the task"),
-  prompt: z.string().describe("The task for the agent to perform"),
-  subagent_type: z.string().describe("The type of specialized agent to use for this task"),
-  task_id: z
-    .string()
-    .describe(
+export interface TaskPromptOps {
+  cancel(sessionID: SessionID): Effect.Effect<void>
+  resolvePromptParts(template: string): Effect.Effect<SessionPrompt.PromptInput["parts"]>
+  prompt(input: SessionPrompt.PromptInput): Effect.Effect<MessageV2.WithParts>
+  loop(input: SessionPrompt.LoopInput): Effect.Effect<MessageV2.WithParts>
+}
+
+const id = "task"
+const BACKGROUND_DESCRIPTION = [
+  "",
+  "",
+  [
+    "Background mode: background=true launches the subagent asynchronously.",
+    "Use task_status(task_id=..., wait=false) to poll, or wait=true to block until done.",
+  ].join(" "),
+].join("\n")
+
+const BaseParameters = Schema.Struct({
+  description: Schema.String.annotate({ description: "A short (3-5 words) description of the task" }),
+  prompt: Schema.String.annotate({ description: "The task for the agent to perform" }),
+  subagent_type: Schema.String.annotate({ description: "The type of specialized agent to use for this task" }),
+  task_id: Schema.optional(Schema.String).annotate({
+    description:
       "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
-    )
-    .optional(),
-  command: z.string().describe("The command that triggered this task").optional(),
+  }),
+  command: Schema.optional(Schema.String).annotate({ description: "The command that triggered this task" }),
 })
 
-export const TaskTool = Tool.define("task", async (ctx) => {
-  const agents = await Agent.list().then((x) => x.filter((a) => a.mode !== "primary"))
+export const Parameters = Schema.Struct({
+  description: Schema.String.annotate({ description: "A short (3-5 words) description of the task" }),
+  prompt: Schema.String.annotate({ description: "The task for the agent to perform" }),
+  subagent_type: Schema.String.annotate({ description: "The type of specialized agent to use for this task" }),
+  task_id: Schema.optional(Schema.String).annotate({
+    description:
+      "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
+  }),
+  command: Schema.optional(Schema.String).annotate({ description: "The command that triggered this task" }),
+  background: Schema.optional(Schema.Boolean).annotate({
+    description: "When true, launch the subagent in the background and return immediately",
+  }),
+})
 
-  // Filter agents by permissions if agent provided
-  const caller = ctx?.agent
-  const accessibleAgents = caller
-    ? agents.filter((a) => PermissionNext.evaluate("task", a.name, caller.permission).action !== "deny")
-    : agents
+function output(sessionID: SessionID, text: string) {
+  return [
+    `task_id: ${sessionID} (for resuming to continue this task if needed)`,
+    "",
+    "<task_result>",
+    text,
+    "</task_result>",
+  ].join("\n")
+}
 
-  const description = DESCRIPTION.replace(
-    "{agents}",
-    accessibleAgents
-      .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)
-      .join("\n"),
+function backgroundOutput(sessionID: SessionID) {
+  return [
+    `task_id: ${sessionID} (for polling this task with task_status)`,
+    "state: running",
+    "",
+    "<task_result>",
+    "Background task started. Continue your current work and call task_status when you need the result.",
+    "</task_result>",
+  ].join("\n")
+}
+
+function backgroundMessage(input: {
+  sessionID: SessionID
+  description: string
+  state: "completed" | "error"
+  text: string
+}) {
+  const tag = input.state === "completed" ? "task_result" : "task_error"
+  const title =
+    input.state === "completed"
+      ? `Background task completed: ${input.description}`
+      : `Background task failed: ${input.description}`
+  return [title, `task_id: ${input.sessionID}`, `state: ${input.state}`, "", `<${tag}>`, input.text, `</${tag}>`].join(
+    "\n",
   )
-  return {
-    description,
-    parameters,
-    async execute(params: z.infer<typeof parameters>, ctx) {
-      const config = await Config.get()
+}
 
-      // Skip permission check when user explicitly invoked via @ or command subtask
+function errorText(error: unknown) {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+export const TaskTool = Tool.define(
+  id,
+  Effect.gen(function* () {
+    const agent = yield* Agent.Service
+    const background = yield* BackgroundJob.Service
+    const bus = yield* Bus.Service
+    const config = yield* Config.Service
+    const sessions = yield* Session.Service
+    const provider = yield* Provider.Service // kilocode_change
+    const scope = yield* Scope.Scope
+    const status = yield* SessionStatus.Service
+    const flags = yield* RuntimeFlags.Service
+
+    const run = Effect.fn("TaskTool.execute")(function* (
+      params: Schema.Schema.Type<typeof Parameters>,
+      ctx: Tool.Context,
+    ) {
+      const cfg = yield* config.get()
+      const runInBackground = params.background === true
+      if (runInBackground && !flags.experimentalBackgroundSubagents) {
+        return yield* Effect.fail(new Error("Background subagents require KILO_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true"))
+      }
+
       if (!ctx.extra?.bypassAgentCheck) {
-        await ctx.ask({
-          permission: "task",
+        yield* ctx.ask({
+          permission: id,
           patterns: [params.subagent_type],
           always: ["*"],
           metadata: {
@@ -58,108 +141,290 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
       }
 
-      const agent = await Agent.get(params.subagent_type)
-      if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
+      const next = yield* agent.get(params.subagent_type)
+      if (!next) {
+        return yield* Effect.fail(new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`))
+      }
+      // kilocode_change start — reject primary agents; only subagent/all modes allowed
+      KiloTask.validate(next, params.subagent_type)
+      // kilocode_change end
 
-      const allowsTask = agent.permission.some((rule) => rule.permission === "task" && rule.action === "allow") // kilocode_change
+      const canTask = KiloTask.nestedTask() // kilocode_change - Kilo disallows subagents spawning subagents
+      const canTodo = next.permission.some((rule) => rule.permission === "todowrite")
 
-      const session = await iife(async () => {
-        if (params.task_id) {
-          const found = await Session.get(params.task_id).catch(() => {})
-          if (found) return found
-        }
-
-        return await Session.create({
+      const taskID = params.task_id
+      const session = taskID
+        ? yield* sessions.get(SessionID.make(taskID)).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+        : undefined
+      if (session && session.parentID !== ctx.sessionID) {
+        return yield* Effect.fail(new Error(`Cannot resume session ${taskID}: not a child of the current session`)) // kilocode_change - prevent cross-session task resume
+      }
+      const parent = yield* sessions.get(ctx.sessionID)
+      const parentAgent = parent.agent
+        ? yield* agent.get(parent.agent).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+        : undefined
+      // kilocode_change start — inherit edit/bash/MCP restrictions from calling agent
+      const caller = yield* agent.get(ctx.agent)
+      const rules = KiloTask.inherited({ caller, session: parent, mcp: cfg.mcp })
+      // kilocode_change end
+      // kilocode_change start - refresh current parent restrictions when resuming an existing task session
+      if (session) {
+        session.permission = KiloTask.merge(
+          session.permission ?? [],
+          deriveSubagentSessionPermission({
+            parentSessionPermission: parent.permission ?? [],
+            parentAgent,
+            subagent: next,
+          }),
+          KiloTask.permissions(rules),
+        )
+        yield* sessions.setPermission({ sessionID: session.id, permission: session.permission })
+      }
+      // kilocode_change end
+      const platform = KiloSession.resolvePlatform(ctx.sessionID) // kilocode_change - preserve parent attribution across task creation/resume
+      const nextSession =
+        session ??
+        (yield* sessions.create({
           parentID: ctx.sessionID,
-          title: params.description + ` (@${agent.name} subagent)`,
-          permission: [
-            {
-              permission: "todowrite",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "todoread",
-              pattern: "*",
-              action: "deny",
-            },
-            ...(allowsTask
-              ? []
-              : [
-                  {
-                    permission: "task" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                ]),
-            ...(config.experimental?.primary_tools?.map((t) => ({
+          title: params.description + ` (@${next.name} subagent)`,
+          platform, // kilocode_change
+          // kilocode_change start - dedupe inherited restrictions before child prompt toggles persist
+          permission: KiloTask.merge(
+            deriveSubagentSessionPermission({
+              parentSessionPermission: parent.permission ?? [],
+              parentAgent,
+              subagent: next,
+            }),
+            cfg.experimental?.primary_tools?.map((item) => ({
               pattern: "*",
               action: "allow" as const,
-              permission: t,
-            })) ?? []),
+              permission: item,
+            })) ?? [],
+            KiloTask.permissions(rules),
+          ),
+          // kilocode_change end
+        }))
+      // kilocode_change start - rebuild in-memory ancestry and attribution after process restart
+      KiloSession.register({ id: nextSession.id, parentID: ctx.sessionID, platform })
+      // kilocode_change end
+
+      const msg = yield* MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID }).pipe(Effect.orDie)
+      if (msg.info.role !== "assistant") return yield* Effect.fail(new Error("Not an assistant message"))
+
+      // kilocode_change start — prefer valid subagent overrides, safely inheriting when overrides go stale
+      const selected = yield* KiloTask.resolveModel({
+        name: next.name,
+        agent: next,
+        config: cfg,
+        parent: {
+          modelID: msg.info.modelID,
+          providerID: msg.info.providerID,
+        },
+        variant: msg.info.variant,
+        provider,
+      })
+      const model = selected.model
+      const variant = selected.variant
+      // kilocode_change end
+      const metadata = {
+        parentSessionId: ctx.sessionID,
+        sessionId: nextSession.id,
+        model,
+        variant, // kilocode_change
+        ...(runInBackground ? { background: true } : {}),
+      }
+
+      yield* ctx.metadata({
+        title: params.description,
+        metadata,
+      })
+
+      const ops = ctx.extra?.promptOps as TaskPromptOps
+      if (!ops) return yield* Effect.fail(new Error("TaskTool requires promptOps in ctx.extra"))
+      const runCancel = yield* EffectBridge.make()
+
+      const runTask = Effect.fn("TaskTool.runTask")(function* () {
+        const parts = yield* ops.resolvePromptParts(params.prompt)
+        KiloSessionProcessor.markReviewTelemetry(parts, params.command) // kilocode_change - carry review command into child session telemetry
+        const result = yield* ops.prompt({
+          messageID: MessageID.ascending(),
+          sessionID: nextSession.id,
+          model: {
+            modelID: model.modelID,
+            providerID: model.providerID,
+          },
+          variant, // kilocode_change
+          agent: next.name,
+          tools: {
+            question: false, // kilocode_change - subagents cannot prompt the user directly
+            ...(canTodo ? {} : { todowrite: false }),
+            ...(canTask ? {} : { task: false }),
+            ...Object.fromEntries((cfg.experimental?.primary_tools ?? []).map((item) => [item, false])),
+          },
+          parts,
+        })
+        // kilocode_change start - expose terminal child assistant errors through the task tool boundary
+        if (result.info.role === "assistant" && result.info.error) {
+          return yield* Effect.fail(new Error(errorMessage(result.info.error)))
+        }
+        // kilocode_change end
+        return result.parts.findLast((item) => item.type === "text")?.text ?? ""
+      })
+
+      const resumeWhenIdle: (input: { userID: MessageID; state: "completed" | "error" }) => Effect.Effect<void> =
+        Effect.fn("TaskTool.resumeWhenIdle")(function* (input: { userID: MessageID; state: "completed" | "error" }) {
+          const latest = yield* sessions
+            .findMessage(ctx.sessionID, (item) => item.info.role === "user")
+            .pipe(Effect.orDie)
+          if (Option.isNone(latest)) return
+          if (latest.value.info.id !== input.userID) return
+          if ((yield* status.get(ctx.sessionID)).type !== "idle") {
+            yield* Effect.sleep("300 millis")
+            return yield* resumeWhenIdle(input)
+          }
+          yield* bus.publish(TuiEvent.ToastShow, {
+            title: input.state === "completed" ? "Background task complete" : "Background task failed",
+            message:
+              input.state === "completed"
+                ? `Background task "${params.description}" finished. Resuming the main thread.`
+                : `Background task "${params.description}" failed. Resuming the main thread.`,
+            variant: input.state === "completed" ? "success" : "error",
+            duration: 5000,
+          })
+          yield* ops
+            .loop({ sessionID: ctx.sessionID })
+            .pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }))
+        })
+
+      const continueIfIdle = Effect.fn("TaskTool.continueIfIdle")(function* (input: {
+        userID: MessageID
+        state: "completed" | "error"
+      }) {
+        yield* resumeWhenIdle(input).pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }))
+      })
+
+      const inject = Effect.fn("TaskTool.injectBackgroundResult")(function* (
+        state: "completed" | "error",
+        text: string,
+      ) {
+        const currentParent = yield* sessions.get(ctx.sessionID)
+        const message = yield* ops.prompt({
+          sessionID: ctx.sessionID,
+          noReply: true,
+          agent: currentParent.agent ?? ctx.agent,
+          parts: [
+            {
+              type: "text",
+              synthetic: true,
+              text: backgroundMessage({
+                sessionID: nextSession.id,
+                description: params.description,
+                state,
+                text,
+              }),
+            },
           ],
         })
-      })
-      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
-      if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
-
-      const model = agent.model ?? {
-        modelID: msg.info.modelID,
-        providerID: msg.info.providerID,
-      }
-
-      ctx.metadata({
-        title: params.description,
-        metadata: {
-          sessionId: session.id,
-          model,
-        },
+        yield* continueIfIdle({ userID: message.info.id, state })
       })
 
-      const messageID = Identifier.ascending("message")
-
-      function cancel() {
-        SessionPrompt.cancel(session.id)
+      const existing = yield* background.get(nextSession.id)
+      if (existing?.status === "running") {
+        return yield* Effect.fail(
+          new Error(`Task ${nextSession.id} is already running. Use task_status to check progress.`),
+        )
       }
-      ctx.abort.addEventListener("abort", cancel)
-      using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
-      const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
 
-      const result = await SessionPrompt.prompt({
-        messageID,
-        sessionID: session.id,
-        model: {
-          modelID: model.modelID,
-          providerID: model.providerID,
-        },
-        agent: agent.name,
-        tools: {
-          todowrite: false,
-          todoread: false,
-          ...(allowsTask ? {} : { task: false }),
-          ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-        },
-        parts: promptParts,
-      })
+      if (runInBackground) {
+        const info = yield* background.start({
+          id: nextSession.id,
+          type: id,
+          title: params.description,
+          metadata,
+          // kilocode_change start - background tasks propagate only cost accrued by this invocation
+          run: Effect.acquireUseRelease(
+            KiloCostPropagation.childCost(sessions, nextSession.id),
+            () =>
+              runTask().pipe(
+                Effect.tap((text) => inject("completed", text).pipe(Effect.ignore)),
+                Effect.catchCause((cause) =>
+                  (Cause.hasInterruptsOnly(cause)
+                    ? Effect.void
+                    : inject("error", errorText(Cause.squash(cause))).pipe(Effect.ignore)
+                  ).pipe(Effect.andThen(Effect.failCause(cause))),
+                ),
+              ),
+            (costBefore) =>
+              Effect.gen(function* () {
+                const costAfter = yield* KiloCostPropagation.childCost(sessions, nextSession.id)
+                yield* KiloCostPropagation.propagate(sessions, ctx.sessionID, ctx.messageID, costAfter - costBefore)
+              }),
+          ),
+          // kilocode_change end
+        })
 
-      const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
-
-      const output = [
-        `task_id: ${session.id} (for resuming to continue this task if needed)`,
-        "",
-        "<task_result>",
-        text,
-        "</task_result>",
-      ].join("\n")
-
-      return {
-        title: params.description,
-        metadata: {
-          sessionId: session.id,
-          model,
-        },
-        output,
+        return {
+          title: params.description,
+          metadata: {
+            ...metadata,
+            jobId: info.id,
+          },
+          output: backgroundOutput(nextSession.id),
+        }
       }
-    },
-  }
-})
+
+      const cancel = ops.cancel(nextSession.id)
+
+      function onAbort() {
+        runCancel.fork(cancel)
+      }
+
+      return yield* Effect.acquireUseRelease(
+        // kilocode_change start - snapshot child cost so we propagate only the delta on resume (#6321)
+        Effect.gen(function* () {
+          ctx.abort.addEventListener("abort", onAbort)
+          return yield* KiloCostPropagation.childCost(sessions, nextSession.id)
+        }),
+        // kilocode_change end
+        () =>
+          Effect.gen(function* () {
+            const text = yield* runTask()
+            return {
+              title: params.description,
+              metadata,
+              output: output(nextSession.id, text),
+            }
+          }),
+        // kilocode_change start - propagate subagent cost delta to parent on every exit path (#6321)
+        (costBefore, exit) =>
+          Effect.gen(function* () {
+            if (Exit.hasInterrupts(exit)) yield* cancel
+          }).pipe(
+            Effect.ensuring(
+              Effect.gen(function* () {
+                ctx.abort.removeEventListener("abort", onAbort)
+                const costAfter = yield* KiloCostPropagation.childCost(sessions, nextSession.id).pipe(
+                  Effect.catchTag("NotFoundError", () => Effect.succeed(costBefore)),
+                )
+                yield* KiloCostPropagation.propagate(
+                  sessions,
+                  ctx.sessionID,
+                  ctx.messageID,
+                  costAfter - costBefore,
+                ).pipe(Effect.catchTag("NotFoundError", () => Effect.void))
+              }),
+            ),
+          ),
+        // kilocode_change end
+      )
+    })
+
+    return {
+      description: flags.experimentalBackgroundSubagents ? DESCRIPTION + BACKGROUND_DESCRIPTION : DESCRIPTION,
+      parameters: Parameters,
+      jsonSchema: flags.experimentalBackgroundSubagents ? undefined : ToolJsonSchema.fromSchema(BaseParameters),
+      execute: (params: Schema.Schema.Type<typeof Parameters>, ctx: Tool.Context) =>
+        run(params, ctx).pipe(Effect.orDie),
+    }
+  }),
+)

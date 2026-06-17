@@ -1,5 +1,17 @@
 module.exports = [
   {
+    source: "/docs/kiloclaw/tools",
+    destination: "/docs/kiloclaw/development-tools",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/cline-to-kilo-migration",
+    destination: "/docs/contributing",
+    basePath: false,
+    permanent: true,
+  },
+  {
     source: "/docs/contributing/architecture/model-provider-blocklist",
     destination: "/docs/collaborate/enterprise/model-access-controls",
     basePath: false,
@@ -632,8 +644,86 @@ module.exports = [
     permanent: true,
   },
   {
+    source: "/docs/contributing/architecture/auto-model-tiers",
+    destination: "/docs/contributing/architecture/cloud-platform#kilo-gateway",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/mcp-oauth-authorization",
+    destination: "/docs/contributing/architecture/cli-runtime#remote-mcp-oauth",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/organization-modes-library",
+    destination: "/docs/contributing/architecture/cli-runtime#config-precedence",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/track-repo-url",
+    destination: "/docs/contributing/architecture/cloud-platform#kilo-gateway",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/voice-transcription",
+    destination: "/docs/contributing/architecture/vscode-extension#bundled-resources",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/per-message-feedback",
+    destination: "/docs/contributing/architecture/cloud-security#privacy-logging-and-retention",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/security-agent",
+    destination: "/docs/contributing/architecture/cloud-platform#security-agent",
+    basePath: false,
+    permanent: true,
+  },
+  {
     source: "/docs/contributing/architecture/onboarding-engagement-improvements",
-    destination: "/docs/contributing/architecture/onboarding-improvements",
+    destination: "/docs/contributing/features/onboarding-improvements",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/features",
+    destination: "/docs/contributing/features",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/enterprise-mcp-controls",
+    destination: "/docs/contributing/features/enterprise-mcp-controls",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/onboarding-improvements",
+    destination: "/docs/contributing/features/onboarding-improvements",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/agent-observability",
+    destination: "/docs/contributing/features/agent-observability",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/benchmarking",
+    destination: "/docs/contributing/features/benchmarking",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/contributing/architecture/feature-template",
+    destination: "/docs/contributing/features/template",
     basePath: false,
     permanent: true,
   },
@@ -685,7 +775,13 @@ module.exports = [
   },
   {
     source: "/docs/advanced-usage/free-and-budget-models",
-    destination: "/docs/code-with-ai/agents/free-and-budget-models",
+    destination: "/docs/getting-started/using-kilo-for-free",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/code-with-ai/agents/free-and-budget-models",
+    destination: "/docs/getting-started/using-kilo-for-free",
     basePath: false,
     permanent: true,
   },
@@ -796,6 +892,12 @@ module.exports = [
     permanent: true,
   },
   {
+    source: "/docs/automate/tools/codebase-search",
+    destination: "/docs/automate/tools/semantic-search",
+    basePath: false,
+    permanent: true,
+  },
+  {
     source: "/docs/automate/kiloclaw/:path*",
     destination: "/docs/kiloclaw/:path*",
     basePath: false,
@@ -803,13 +905,59 @@ module.exports = [
   },
   {
     source: "/docs/contributing/architecture/vercel-ai-gateway",
-    destination: "/docs/contributing/architecture/features",
+    destination: "/docs/contributing/features",
     basePath: false,
     permanent: true,
   },
   {
     source: "/docs/code-with-ai/agents/using-modes",
     destination: "/docs/code-with-ai/agents/using-agents",
+    basePath: false,
+    permanent: true,
+  },
+
+  // ============================================
+  // KILOCLAW
+  // ============================================
+  {
+    source: "/docs/kiloclaw/suggested-configuration",
+    destination: "/docs/kiloclaw/end-to-end",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/kiloclaw/control-ui",
+    destination: "/docs/kiloclaw/control-ui/overview",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/kiloclaw/pricing",
+    destination: "/docs/kiloclaw/faq/pricing",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/kiloclaw/troubleshooting",
+    destination: "/docs/kiloclaw/troubleshooting/common-questions",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/kiloclaw/version-pinning",
+    destination: "/docs/kiloclaw/control-ui/version-pinning",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/docs/code-with-ai/gastown/wasteland/troubleshooting",
+    destination: "/docs/code-with-ai/gastown/wasteland",
+    basePath: false,
+    permanent: true,
+  },
+  {
+    source: "/auto-top-ups",
+    destination: "https://kilo.ai/features/auto-top-ups",
     basePath: false,
     permanent: true,
   },

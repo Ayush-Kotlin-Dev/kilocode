@@ -4,35 +4,36 @@ import { Script } from "@opencode-ai/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 
-const highlightsTemplate = `
-<!--
-Add highlights before publishing. Delete this section if no highlights.
-
-- For multiple highlights, use multiple <highlight> tags
-- Highlights with the same source attribute get grouped together
--->
-
-<!--
-<highlight source="SourceName (TUI/Desktop/Web/Core)">
-  <h2>Feature title goes here</h2>
-  <p short="Short description used for Desktop Recap">
-    Full description of the feature or change
-  </p>
-
-  https://github.com/user-attachments/assets/uuid-for-video (you will want to drag & drop the video or picture)
-
-  <img
-    width="1912"
-    height="1164"
-    alt="image"
-    src="https://github.com/user-attachments/assets/uuid-for-image"
-  />
-</highlight>
--->
-
-`
-
 console.log("=== publishing ===\n")
+
+// kilocode_change start - consume changesets on the publish runner so changelog
+// changes are included in the release commit. Previously this ran in the
+// version job on a separate runner whose workspace was discarded.
+{
+  await $`bun install`
+  const paths = ["packages/kilo-vscode/CHANGELOG.md", "packages/opencode/CHANGELOG.md"]
+  const before = new Map<string, string>()
+  for (const p of paths) {
+    before.set(
+      p,
+      await Bun.file(p)
+        .text()
+        .catch(() => ""),
+    )
+  }
+  await $`bunx changeset version`
+  // Changeset computes its own version from package.json, but we use
+  // Script.version. Fix the heading in any changelog that was modified.
+  for (const p of paths) {
+    const content = await Bun.file(p)
+      .text()
+      .catch(() => "")
+    if (content !== before.get(p)) {
+      await Bun.write(p, content.replace(/^## .+$/m, `## ${Script.version}`))
+    }
+  }
+}
+// kilocode_change end
 
 const pkgjsons = await Array.fromAsync(
   new Bun.Glob("**/package.json").scan({
@@ -58,16 +59,44 @@ await $`bun install`
 await import(`../packages/sdk/js/script/build.ts`)
 
 if (Script.release) {
-  if (!Script.preview) {
-    await $`git commit -am "release: v${Script.version}"`
-    await $`git tag v${Script.version}`
-    await $`git fetch origin`
-    await $`git cherry-pick HEAD..origin/dev`.nothrow()
-    await $`git push origin HEAD --tags --no-verify --force-with-lease`
-    await new Promise((resolve) => setTimeout(resolve, 5_000))
+  // kilocode_change start - commit, tag, and push with rebase + retry to handle
+  // concurrent merges to main. Rebase (instead of cherry-pick) handles
+  // overlapping file changes cleanly, and the retry loop covers the narrow
+  // window between fetch and push where another commit could land.
+  await $`git commit -am "release: v${Script.version}"`
+  await $`git tag v${Script.version}`
+  const retries = 3
+  for (let i = 1; i <= retries; i++) {
+    await $`git fetch origin main`
+    const rebase = await $`git rebase origin/main`.nothrow()
+    if (rebase.exitCode !== 0) {
+      console.error(`rebase failed (attempt ${i}/${retries}), aborting rebase`)
+      await $`git rebase --abort`.nothrow()
+      if (i === retries)
+        throw new Error("failed to rebase release commit onto origin/main after " + retries + " attempts")
+      await new Promise((r) => setTimeout(r, 3_000))
+      continue
+    }
+    const push = await $`git push origin HEAD:main --tags --no-verify --force-with-lease`.nothrow()
+    if (push.exitCode === 0) {
+      console.log("release commit pushed successfully")
+      break
+    }
+    console.warn(`push rejected (attempt ${i}/${retries}), retrying...`)
+    if (i === retries) throw new Error("failed to push release commit after " + retries + " attempts")
+    await new Promise((r) => setTimeout(r, 3_000))
   }
+  // kilocode_change end
 
-  await $`gh release edit v${Script.version} --draft=false --repo ${process.env.GH_REPO}`
+  // kilocode_change start - publish channel-aware GitHub release notes
+  const { publishNotes } = await import("./kilocode/release-notes")
+  await publishNotes({
+    version: Script.version,
+    prerelease: Script.preview,
+    repo: process.env.GH_REPO,
+    temp: process.env.RUNNER_TEMP,
+  })
+  // kilocode_change end
 }
 
 console.log("\n=== cli ===\n")
@@ -78,6 +107,18 @@ await import(`../packages/sdk/js/script/publish.ts`)
 
 console.log("\n=== plugin ===\n")
 await import(`../packages/plugin/script/publish.ts`)
+
+// kilocode_change start
+console.log("\n=== vscode ===\n")
+await import(`../packages/kilo-vscode/script/publish.ts`)
+// kilocode_change end
+
+// kilocode_change start - Kilo does not ship the opencode desktop app
+// if (Script.release) {
+//   await $`bun ./packages/desktop/scripts/finalize-latest-json.ts`
+//   await $`bun ./packages/desktop/scripts/finalize-latest-yml.ts`
+// }
+// kilocode_change end
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)

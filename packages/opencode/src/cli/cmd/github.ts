@@ -1,6 +1,6 @@
 import path from "path"
 import { exec } from "child_process"
-import { Filesystem } from "../../util/filesystem"
+import { Filesystem } from "@/util/filesystem"
 import * as prompts from "@clack/prompts"
 import { map, pipe, sortBy, values } from "remeda"
 import { Octokit } from "@octokit/rest"
@@ -18,17 +18,23 @@ import type {
 } from "@octokit/webhooks-types"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
-import { ModelsDev } from "../../provider/models"
-import { Instance } from "@/project/instance"
-import { bootstrap } from "../bootstrap"
-import { Session } from "../../session"
-import { Identifier } from "../../id/id"
-import { Provider } from "../../provider/provider"
+import { effectCmd } from "../effect-cmd"
+import { ModelsDev } from "@opencode-ai/core/models"
+import { InstanceRef } from "@/effect/instance-ref"
+import { SessionShare } from "@/share/session"
+import { Session } from "@/session/session"
+import type { SessionID } from "../../session/schema"
+import { MessageID, PartID } from "../../session/schema"
+import { Provider } from "@/provider/provider"
 import { Bus } from "../../bus"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "@/session/prompt"
-import { $ } from "bun"
+import { Git } from "@/git"
 import { setTimeout as sleep } from "node:timers/promises"
+import { Process } from "@/util/process"
+import { parseGitHubRemote } from "@/util/repository"
+import { Effect } from "effect"
+import { GitHubSecurity } from "@/kilocode/security/github" // kilocode_change
 
 type GitHubAuthor = {
   login: string
@@ -147,18 +153,7 @@ const SUPPORTED_EVENTS = [...USER_EVENTS, ...REPO_EVENTS] as const
 type UserEvent = (typeof USER_EVENTS)[number]
 type RepoEvent = (typeof REPO_EVENTS)[number]
 
-// Parses GitHub remote URLs in various formats:
-// - https://github.com/owner/repo.git
-// - https://github.com/owner/repo
-// - git@github.com:owner/repo.git
-// - git@github.com:owner/repo
-// - ssh://git@github.com/owner/repo.git
-// - ssh://git@github.com/owner/repo
-export function parseGitHubRemote(url: string): { owner: string; repo: string } | null {
-  const match = url.match(/^(?:(?:https?|ssh):\/\/)?(?:git@)?github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
-  if (!match) return null
-  return { owner: match[1], repo: match[2] }
-}
+export { parseGitHubRemote }
 
 /**
  * Extracts displayable text from assistant response parts.
@@ -194,195 +189,200 @@ export const GithubCommand = cmd({
   async handler() {},
 })
 
-export const GithubInstallCommand = cmd({
+export const GithubInstallCommand = effectCmd({
   command: "install",
   describe: "install the GitHub agent",
-  async handler() {
-    await Instance.provide({
-      directory: process.cwd(),
-      async fn() {
-        {
-          UI.empty()
-          prompts.intro("Install GitHub agent")
-          const app = await getAppInfo()
-          await installGitHubApp()
+  handler: Effect.fn("Cli.github.install")(function* () {
+    const maybeCtx = yield* InstanceRef
+    if (!maybeCtx) return yield* Effect.die("InstanceRef not provided")
+    const ctx = maybeCtx
+    const modelsDev = yield* ModelsDev.Service
+    const gitSvc = yield* Git.Service
+    yield* Effect.promise(async () => {
+      {
+        UI.empty()
+        prompts.intro("Install GitHub agent")
+        const app = await getAppInfo()
+        await installGitHubApp()
 
-          const providers = await ModelsDev.get().then((p) => {
-            // TODO: add guide for copilot, for now just hide it
-            delete p["github-copilot"]
-            return p
+        const providers = await Effect.runPromise(modelsDev.get()).then((p) => {
+          // TODO: add guide for copilot, for now just hide it
+          delete p["github-copilot"]
+          return p
+        })
+
+        const provider = await promptProvider()
+        const model = await promptModel()
+        //const key = await promptKey()
+
+        await addWorkflowFiles()
+        printNextSteps()
+
+        function printNextSteps() {
+          let step2
+          if (provider === "amazon-bedrock") {
+            step2 =
+              "Configure OIDC in AWS - https://docs.github.com/en/actions/how-tos/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services"
+          } else {
+            step2 = [
+              `    2. Add the following secrets in org or repo (${app.owner}/${app.repo}) settings`,
+              "",
+              ...providers[provider].env.map((e) => `       - ${e}`),
+            ].join("\n")
+          }
+
+          prompts.outro(
+            [
+              "Next steps:",
+              "",
+              `    1. Commit the \`${WORKFLOW_FILE}\` file and push`,
+              step2,
+              "",
+              "    3. Go to a GitHub issue and comment `/kilo summarize` to see the agent in action", // kilocode_change
+            ].join("\n"),
+          )
+        }
+
+        async function getAppInfo() {
+          const project = ctx.project
+          if (project.vcs !== "git") {
+            prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
+            throw new UI.CancelledError()
+          }
+
+          // Get repo info
+          const info = await Effect.runPromise(gitSvc.run(["remote", "get-url", "origin"], { cwd: ctx.worktree })).then(
+            (x) => x.text().trim(),
+          )
+          const parsed = parseGitHubRemote(info)
+          if (!parsed) {
+            prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
+            throw new UI.CancelledError()
+          }
+          return { owner: parsed.owner, repo: parsed.repo, root: ctx.worktree }
+        }
+
+        async function promptProvider() {
+          const priority: Record<string, number> = {
+            kilo: 0, // kilocode_change
+            anthropic: 1,
+            openai: 2,
+            google: 3,
+          }
+          let provider = await prompts.select({
+            message: "Select provider",
+            maxItems: 8,
+            options: pipe(
+              providers,
+              values(),
+              sortBy(
+                (x) => priority[x.id] ?? 99,
+                (x) => x.name ?? x.id,
+              ),
+              map((x) => ({
+                label: x.name,
+                value: x.id,
+                hint: priority[x.id] === 0 ? "recommended" : undefined,
+              })),
+            ),
           })
 
-          const provider = await promptProvider()
-          const model = await promptModel()
-          //const key = await promptKey()
+          if (prompts.isCancel(provider)) throw new UI.CancelledError()
 
-          await addWorkflowFiles()
-          printNextSteps()
+          return provider
+        }
 
-          function printNextSteps() {
-            let step2
-            if (provider === "amazon-bedrock") {
-              step2 =
-                "Configure OIDC in AWS - https://docs.github.com/en/actions/how-tos/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services"
-            } else {
-              step2 = [
-                `    2. Add the following secrets in org or repo (${app.owner}/${app.repo}) settings`,
-                "",
-                ...providers[provider].env.map((e) => `       - ${e}`),
-              ].join("\n")
+        async function promptModel() {
+          const providerData = providers[provider]!
+
+          const model = await prompts.select({
+            message: "Select model",
+            maxItems: 8,
+            options: pipe(
+              providerData.models,
+              values(),
+              sortBy((x) => x.name ?? x.id),
+              map((x) => ({
+                label: x.name ?? x.id,
+                value: x.id,
+              })),
+            ),
+          })
+
+          if (prompts.isCancel(model)) throw new UI.CancelledError()
+          return model
+        }
+
+        async function installGitHubApp() {
+          const s = prompts.spinner()
+          s.start("Installing GitHub app")
+
+          // Get installation
+          const installation = await getInstallation()
+          if (installation) return s.stop("GitHub app already installed")
+
+          // Open browser
+          const url = "https://github.com/apps/kiloconnect" // kilocode_change
+          const command =
+            process.platform === "darwin"
+              ? `open "${url}"`
+              : process.platform === "win32"
+                ? `start "" "${url}"`
+                : `xdg-open "${url}"`
+
+          exec(command, { windowsHide: true }, (error) => {
+            if (error) {
+              prompts.log.warn(`Could not open browser. Please visit: ${url}`)
             }
+          })
 
-            prompts.outro(
-              [
-                "Next steps:",
-                "",
-                `    1. Commit the \`${WORKFLOW_FILE}\` file and push`,
-                step2,
-                "",
-                "    3. Go to a GitHub issue and comment `/kilo summarize` to see the agent in action", // kilocode_change
-              ].join("\n"),
-            )
-          }
-
-          async function getAppInfo() {
-            const project = Instance.project
-            if (project.vcs !== "git") {
-              prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
-              throw new UI.CancelledError()
-            }
-
-            // Get repo info
-            const info = (await $`git remote get-url origin`.quiet().nothrow().text()).trim()
-            const parsed = parseGitHubRemote(info)
-            if (!parsed) {
-              prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
-              throw new UI.CancelledError()
-            }
-            return { owner: parsed.owner, repo: parsed.repo, root: Instance.worktree }
-          }
-
-          async function promptProvider() {
-            const priority: Record<string, number> = {
-              kilo: 0, // kilocode_change
-              anthropic: 1,
-              openai: 2,
-              google: 3,
-            }
-            let provider = await prompts.select({
-              message: "Select provider",
-              maxItems: 8,
-              options: pipe(
-                providers,
-                values(),
-                sortBy(
-                  (x) => priority[x.id] ?? 99,
-                  (x) => x.name ?? x.id,
-                ),
-                map((x) => ({
-                  label: x.name,
-                  value: x.id,
-                  hint: priority[x.id] === 0 ? "recommended" : undefined,
-                })),
-              ),
-            })
-
-            if (prompts.isCancel(provider)) throw new UI.CancelledError()
-
-            return provider
-          }
-
-          async function promptModel() {
-            const providerData = providers[provider]!
-
-            const model = await prompts.select({
-              message: "Select model",
-              maxItems: 8,
-              options: pipe(
-                providerData.models,
-                values(),
-                sortBy((x) => x.name ?? x.id),
-                map((x) => ({
-                  label: x.name ?? x.id,
-                  value: x.id,
-                })),
-              ),
-            })
-
-            if (prompts.isCancel(model)) throw new UI.CancelledError()
-            return model
-          }
-
-          async function installGitHubApp() {
-            const s = prompts.spinner()
-            s.start("Installing GitHub app")
-
-            // Get installation
+          // Wait for installation
+          s.message("Waiting for GitHub app to be installed")
+          const MAX_RETRIES = 120
+          let retries = 0
+          do {
             const installation = await getInstallation()
-            if (installation) return s.stop("GitHub app already installed")
+            if (installation) break
 
-            // Open browser
-            const url = "https://github.com/apps/kiloconnect" // kilocode_change
-            const command =
-              process.platform === "darwin"
-                ? `open "${url}"`
-                : process.platform === "win32"
-                  ? `start "" "${url}"`
-                  : `xdg-open "${url}"`
-
-            exec(command, (error) => {
-              if (error) {
-                prompts.log.warn(`Could not open browser. Please visit: ${url}`)
-              }
-            })
-
-            // Wait for installation
-            s.message("Waiting for GitHub app to be installed")
-            const MAX_RETRIES = 120
-            let retries = 0
-            do {
-              const installation = await getInstallation()
-              if (installation) break
-
-              if (retries > MAX_RETRIES) {
-                s.stop(
-                  `Failed to detect GitHub app installation. Make sure to install the app for the \`${app.owner}/${app.repo}\` repository.`,
-                )
-                throw new UI.CancelledError()
-              }
-
-              retries++
-              await sleep(1000)
-            } while (true)
-
-            s.stop("Installed GitHub app")
-
-            async function getInstallation() {
-              // kilocode_change start - updated to new endpoint
-              return await fetch(`https://api.kilo.ai/api/integrations/github/check-installation?owner=${app.owner}`)
-                .then((res) => res.json())
-                .then((data) => data.installation)
-              // kilocode_change end
+            if (retries > MAX_RETRIES) {
+              s.stop(
+                `Failed to detect GitHub app installation. Make sure to install the app for the \`${app.owner}/${app.repo}\` repository.`,
+              )
+              throw new UI.CancelledError()
             }
+
+            retries++
+            await sleep(1000)
+          } while (true) // oxlint-disable-line no-constant-condition
+
+          s.stop("Installed GitHub app")
+
+          async function getInstallation() {
+            // kilocode_change start - updated to new endpoint
+            return await fetch(`https://api.kilo.ai/api/integrations/github/check-installation?owner=${app.owner}`)
+              .then((res) => res.json())
+              .then((data) => data.installation)
+            // kilocode_change end
           }
+        }
 
-          async function addWorkflowFiles() {
-            // kilocode_change start - updated workflow template with Kilo branding and gateway secrets
-            const providerEnvStr =
-              provider === "amazon-bedrock"
-                ? ""
-                : providers[provider].env.map((e) => `\n          ${e}: \${{ secrets.${e} }}`).join("")
+        async function addWorkflowFiles() {
+          // kilocode_change start - updated workflow template with Kilo branding and gateway secrets
+          const providerEnvStr =
+            provider === "amazon-bedrock"
+              ? ""
+              : providers[provider].env.map((e) => `\n          ${e}: \${{ secrets.${e} }}`).join("")
 
-            const kiloGatewayEnv =
-              provider === "kilo"
-                ? `\n          KILO_API_KEY: \${{ secrets.KILO_API_KEY }}\n          KILO_ORG_ID: \${{ secrets.KILO_ORG_ID }}`
-                : ""
+          const kiloGatewayEnv =
+            provider === "kilo"
+              ? `\n          KILO_API_KEY: \${{ secrets.KILO_API_KEY }}\n          KILO_ORG_ID: \${{ secrets.KILO_ORG_ID }}`
+              : ""
 
-            const envStr = providerEnvStr || kiloGatewayEnv ? `\n        env:${providerEnvStr}${kiloGatewayEnv}` : ""
+          const envStr = providerEnvStr || kiloGatewayEnv ? `\n        env:${providerEnvStr}${kiloGatewayEnv}` : ""
 
-            await Filesystem.write(
-              path.join(app.root, WORKFLOW_FILE),
-              `name: kilo
+          await Filesystem.write(
+            path.join(app.root, WORKFLOW_FILE),
+            `name: kilo
 
 on:
   issue_comment:
@@ -413,18 +413,17 @@ jobs:
         uses: Kilo-Org/kilocode/github@latest${envStr}
         with:
           model: ${provider}/${model}`,
-            )
-            // kilocode_change end
+          )
+          // kilocode_change end
 
-            prompts.log.success(`Added workflow file: "${WORKFLOW_FILE}"`)
-          }
+          prompts.log.success(`Added workflow file: "${WORKFLOW_FILE}"`)
         }
-      },
+      }
     })
-  },
+  }),
 })
 
-export const GithubRunCommand = cmd({
+export const GithubRunCommand = effectCmd({
   command: "run",
   describe: "run the GitHub agent",
   builder: (yargs) =>
@@ -437,8 +436,17 @@ export const GithubRunCommand = cmd({
         type: "string",
         describe: "GitHub personal access token (github_pat_********)",
       }),
-  async handler(args) {
-    await bootstrap(process.cwd(), async () => {
+  handler: Effect.fn("Cli.github.run")(function* (args) {
+    const ctx = yield* InstanceRef
+    if (!ctx) return yield* Effect.die("InstanceRef not provided")
+    const gitSvc = yield* Git.Service
+    const sessionSvc = yield* Session.Service
+    const sessionShare = yield* SessionShare.Service
+    const sessionPrompt = yield* SessionPrompt.Service
+    const busSvc = yield* Bus.Service
+    const runLocalEffect = <A, E>(effect: Effect.Effect<A, E>) =>
+      Effect.runPromise(effect.pipe(Effect.provideService(InstanceRef, ctx)))
+    yield* Effect.promise(async () => {
       const isMock = args.token || args.event
 
       const context = isMock ? (JSON.parse(args.event!) as Context) : github.context
@@ -481,13 +489,13 @@ export const GithubRunCommand = cmd({
           ? (payload as IssueCommentEvent | IssuesEvent).issue.number
           : (payload as PullRequestEvent | PullRequestReviewCommentEvent).pull_request.number
       const runUrl = `/${owner}/${repo}/actions/runs/${runId}`
-      const shareBaseUrl = isMock ? "https://dev.kilo.ai" : "https://kilo.ai" // kilocode_change
+      const shareBaseUrl = isMock ? "https://dev.kilo.ai" : "https://kilo.ai"
 
       let appToken: string
       let octoRest: Octokit
       let octoGraph: typeof graphql
       let gitConfig: string
-      let session: { id: string; title: string; version: string }
+      let session: { id: SessionID; title: string; version: string }
       let shareId: string | undefined
       let exitCode = 0
       type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
@@ -500,6 +508,26 @@ export const GithubRunCommand = cmd({
           ? "pr_review"
           : "issue"
         : undefined
+      const gitText = async (args: string[]) => {
+        const result = await Effect.runPromise(gitSvc.run(args, { cwd: ctx.worktree }))
+        if (result.exitCode !== 0) {
+          throw new Process.RunFailedError(["git", ...args], result.exitCode, result.stdout, result.stderr)
+        }
+        return result.text().trim()
+      }
+      const gitRun = async (args: string[]) => {
+        const result = await Effect.runPromise(gitSvc.run(args, { cwd: ctx.worktree }))
+        if (result.exitCode !== 0) {
+          throw new Process.RunFailedError(["git", ...args], result.exitCode, result.stdout, result.stderr)
+        }
+        return result
+      }
+      const gitStatus = (args: string[]) => Effect.runPromise(gitSvc.run(args, { cwd: ctx.worktree }))
+      const commitChanges = async (summary: string, actor?: string) => {
+        const args = ["commit", "-m", summary]
+        if (actor) args.push("-m", `Co-authored-by: ${actor} <${actor}@users.noreply.github.com>`)
+        await gitRun(args)
+      }
 
       try {
         if (useGithubToken) {
@@ -531,20 +559,22 @@ export const GithubRunCommand = cmd({
 
         // Setup kilo session // kilocode_change
         const repoData = await fetchRepo()
-        session = await Session.create({
-          permission: [
-            {
-              permission: "question",
-              action: "deny",
-              pattern: "*",
-            },
-          ],
-        })
-        subscribeSessionEvents()
+        session = await runLocalEffect(
+          sessionSvc.create({
+            permission: [
+              {
+                permission: "question",
+                action: "deny",
+                pattern: "*",
+              },
+            ],
+          }),
+        )
+        await subscribeSessionEvents()
         shareId = await (async () => {
           if (share === false) return
           if (!share && repoData.data.private) return
-          await Session.share(session.id)
+          await runLocalEffect(sessionShare.share(session.id))
           return session.id.slice(-8)
         })()
         console.log("kilo session", session.id) // kilocode_change
@@ -560,7 +590,7 @@ export const GithubRunCommand = cmd({
           }
           const branchPrefix = isWorkflowDispatchEvent ? "dispatch" : "schedule"
           const branch = await checkoutNewBranch(branchPrefix)
-          const head = (await $`git rev-parse HEAD`).stdout.toString().trim()
+          const head = await gitText(["rev-parse", "HEAD"])
           const response = await chat(userPrompt, promptFiles)
           const { dirty, uncommittedChanges, switched } = await branchIsDirty(head, branch)
           if (switched) {
@@ -594,7 +624,7 @@ export const GithubRunCommand = cmd({
           // Local PR
           if (prData.headRepository.nameWithOwner === prData.baseRepository.nameWithOwner) {
             await checkoutLocalBranch(prData)
-            const head = (await $`git rev-parse HEAD`).stdout.toString().trim()
+            const head = await gitText(["rev-parse", "HEAD"])
             const dataPrompt = buildPromptDataForPR(prData)
             const response = await chat(`${userPrompt}\n\n${dataPrompt}`, promptFiles)
             const { dirty, uncommittedChanges, switched } = await branchIsDirty(head, prData.headRefName)
@@ -612,7 +642,7 @@ export const GithubRunCommand = cmd({
           // Fork PR
           else {
             const forkBranch = await checkoutForkBranch(prData)
-            const head = (await $`git rev-parse HEAD`).stdout.toString().trim()
+            const head = await gitText(["rev-parse", "HEAD"])
             const dataPrompt = buildPromptDataForPR(prData)
             const response = await chat(`${userPrompt}\n\n${dataPrompt}`, promptFiles)
             const { dirty, uncommittedChanges, switched } = await branchIsDirty(head, forkBranch)
@@ -631,7 +661,7 @@ export const GithubRunCommand = cmd({
         // Issue
         else {
           const branch = await checkoutNewBranch("issue")
-          const head = (await $`git rev-parse HEAD`).stdout.toString().trim()
+          const head = await gitText(["rev-parse", "HEAD"])
           const issueData = await fetchIssue()
           const dataPrompt = buildPromptDataForIssue(issueData)
           const response = await chat(`${userPrompt}\n\n${dataPrompt}`, promptFiles)
@@ -665,7 +695,7 @@ export const GithubRunCommand = cmd({
         exitCode = 1
         console.error(e instanceof Error ? e.message : String(e))
         let msg = e
-        if (e instanceof $.ShellError) {
+        if (e instanceof Process.RunFailedError) {
           msg = e.stderr.toString()
         } else if (e instanceof Error) {
           msg = e.message
@@ -720,7 +750,7 @@ export const GithubRunCommand = cmd({
 
       function normalizeOidcBaseUrl(): string {
         const value = process.env["OIDC_BASE_URL"]
-        if (!value) return "https://api.kilo.ai" // kilocode_change
+        if (!value) return "https://api.kilo.ai"
         return value.replace(/\/+$/, "")
       }
 
@@ -816,7 +846,10 @@ export const GithubRunCommand = cmd({
         let offset = 0
         for (const m of matches) {
           const tag = m[0]
-          const url = m[1]
+          // kilocode_change start - only fetch canonical GitHub attachment routes
+          const url = GitHubSecurity.attachment(m[1])
+          if (!url) continue
+          // kilocode_change end
           const start = m.index
           const filename = path.basename(url)
 
@@ -851,11 +884,10 @@ export const GithubRunCommand = cmd({
         return { userPrompt: prompt, promptFiles: imgData }
       }
 
-      function subscribeSessionEvents() {
+      async function subscribeSessionEvents() {
         const TOOL: Record<string, [string, string]> = {
           todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
-          todoread: ["Todo", UI.Style.TEXT_WARNING_BOLD],
-          bash: ["Bash", UI.Style.TEXT_DANGER_BOLD],
+          bash: ["Shell", UI.Style.TEXT_DANGER_BOLD],
           edit: ["Edit", UI.Style.TEXT_SUCCESS_BOLD],
           glob: ["Glob", UI.Style.TEXT_INFO_BOLD],
           grep: ["Grep", UI.Style.TEXT_INFO_BOLD],
@@ -875,39 +907,41 @@ export const GithubRunCommand = cmd({
         }
 
         let text = ""
-        Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-          if (evt.properties.part.sessionID !== session.id) return
-          //if (evt.properties.part.messageID === messageID) return
-          const part = evt.properties.part
+        await runLocalEffect(
+          busSvc.subscribeCallback(MessageV2.Event.PartUpdated, (evt) => {
+            if (evt.properties.part.sessionID !== session.id) return
+            //if (evt.properties.part.messageID === messageID) return
+            const part = evt.properties.part
 
-          if (part.type === "tool" && part.state.status === "completed") {
-            const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
-            const title =
-              part.state.title || Object.keys(part.state.input).length > 0
-                ? JSON.stringify(part.state.input)
-                : "Unknown"
-            console.log()
-            printEvent(color, tool, title)
-          }
-
-          if (part.type === "text") {
-            text = part.text
-
-            if (part.time?.end) {
-              UI.empty()
-              UI.println(UI.markdown(text))
-              UI.empty()
-              text = ""
-              return
+            if (part.type === "tool" && part.state.status === "completed") {
+              const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
+              const title =
+                part.state.title || Object.keys(part.state.input).length > 0
+                  ? JSON.stringify(part.state.input)
+                  : "Unknown"
+              console.log()
+              printEvent(color, tool, title)
             }
-          }
-        })
+
+            if (part.type === "text") {
+              text = part.text
+
+              if (part.time?.end) {
+                UI.empty()
+                UI.println(UI.markdown(text))
+                UI.empty()
+                text = ""
+                return
+              }
+            }
+          }),
+        )
       }
 
       async function summarize(response: string) {
         try {
           return await chat(`Summarize the following in less than 40 characters:\n\n${response}`)
-        } catch (e) {
+        } catch {
           const title = issueEvent
             ? issueEvent.issue.title
             : (payload as PullRequestReviewCommentEvent).pull_request.title
@@ -918,96 +952,88 @@ export const GithubRunCommand = cmd({
       async function chat(message: string, files: PromptFiles = []) {
         console.log("Sending message to kilo...") // kilocode_change
 
-        const result = await SessionPrompt.prompt({
-          sessionID: session.id,
-          messageID: Identifier.ascending("message"),
-          variant,
-          model: {
-            providerID,
-            modelID,
-          },
-          // agent is omitted - server will use default_agent from config or fall back to "build"
-          parts: [
-            {
-              id: Identifier.ascending("part"),
-              type: "text",
-              text: message,
-            },
-            ...files.flatMap((f) => [
-              {
-                id: Identifier.ascending("part"),
-                type: "file" as const,
-                mime: f.mime,
-                url: `data:${f.mime};base64,${f.content}`,
-                filename: f.filename,
-                source: {
-                  type: "file" as const,
-                  text: {
-                    value: f.replacement,
-                    start: f.start,
-                    end: f.end,
-                  },
-                  path: f.filename,
-                },
+        return runLocalEffect(
+          Effect.gen(function* () {
+            const prompt = sessionPrompt
+            const result = yield* prompt.prompt({
+              sessionID: session.id,
+              messageID: MessageID.ascending(),
+              variant,
+              model: {
+                providerID,
+                modelID,
               },
-            ]),
-          ],
-        })
+              // agent is omitted - server will use default_agent from config or fall back to "build"
+              parts: [
+                {
+                  id: PartID.ascending(),
+                  type: "text",
+                  text: message,
+                },
+                ...files.flatMap((f) => [
+                  {
+                    id: PartID.ascending(),
+                    type: "file" as const,
+                    mime: f.mime,
+                    url: `data:${f.mime};base64,${f.content}`,
+                    filename: f.filename,
+                    source: {
+                      type: "file" as const,
+                      text: {
+                        value: f.replacement,
+                        start: f.start,
+                        end: f.end,
+                      },
+                      path: f.filename,
+                    },
+                  },
+                ]),
+              ],
+            })
 
-        // result should always be assistant just satisfying type checker
-        if (result.info.role === "assistant" && result.info.error) {
-          const err = result.info.error
-          console.error("Agent error:", err)
+            if (result.info.role === "assistant" && result.info.error) {
+              const err = result.info.error
+              console.error("Agent error:", err)
+              if (err.name === "ContextOverflowError") throw new Error(formatPromptTooLargeError(files))
+              const message = "message" in err.data ? err.data.message : ""
+              throw new Error(`${err.name}: ${message}`)
+            }
 
-          if (err.name === "ContextOverflowError") {
-            throw new Error(formatPromptTooLargeError(files))
-          }
+            const text = extractResponseText(result.parts)
+            if (text) return text
 
-          const errorMsg = err.data?.message || ""
-          throw new Error(`${err.name}: ${errorMsg}`)
-        }
+            console.log("Requesting summary from agent...")
+            const summary = yield* prompt.prompt({
+              sessionID: session.id,
+              messageID: MessageID.ascending(),
+              variant,
+              model: {
+                providerID,
+                modelID,
+              },
+              tools: { "*": false },
+              parts: [
+                {
+                  id: PartID.ascending(),
+                  type: "text",
+                  text: "Summarize the actions (tool calls & reasoning) you did for the user in 1-2 sentences.",
+                },
+              ],
+            })
 
-        const text = extractResponseText(result.parts)
-        if (text) return text
+            if (summary.info.role === "assistant" && summary.info.error) {
+              const err = summary.info.error
+              console.error("Summary agent error:", err)
+              if (err.name === "ContextOverflowError") throw new Error(formatPromptTooLargeError(files))
+              const message = "message" in err.data ? err.data.message : ""
+              throw new Error(`${err.name}: ${message}`)
+            }
 
-        // No text part (tool-only or reasoning-only) - ask agent to summarize
-        console.log("Requesting summary from agent...")
-        const summary = await SessionPrompt.prompt({
-          sessionID: session.id,
-          messageID: Identifier.ascending("message"),
-          variant,
-          model: {
-            providerID,
-            modelID,
-          },
-          tools: { "*": false }, // Disable all tools to force text response
-          parts: [
-            {
-              id: Identifier.ascending("part"),
-              type: "text",
-              text: "Summarize the actions (tool calls & reasoning) you did for the user in 1-2 sentences.",
-            },
-          ],
-        })
-
-        if (summary.info.role === "assistant" && summary.info.error) {
-          const err = summary.info.error
-          console.error("Summary agent error:", err)
-
-          if (err.name === "ContextOverflowError") {
-            throw new Error(formatPromptTooLargeError(files))
-          }
-
-          const errorMsg = err.data?.message || ""
-          throw new Error(`${err.name}: ${errorMsg}`)
-        }
-
-        const summaryText = extractResponseText(summary.parts)
-        if (!summaryText) {
-          throw new Error("Failed to get summary from agent")
-        }
-
-        return summaryText
+            const summaryText = extractResponseText(summary.parts)
+            if (!summaryText) throw new Error("Failed to get summary from agent")
+            return summaryText
+          }),
+        )
       }
 
       async function getOidcToken() {
@@ -1017,6 +1043,7 @@ export const GithubRunCommand = cmd({
           console.error("Failed to get OIDC token:", error instanceof Error ? error.message : error)
           throw new Error(
             "Could not fetch an OIDC token. Make sure to add `id-token: write` to your workflow permissions.",
+            { cause: error },
           )
         }
       }
@@ -1059,29 +1086,29 @@ export const GithubRunCommand = cmd({
         const config = "http.https://github.com/.extraheader"
         // actions/checkout@v6 no longer stores credentials in .git/config,
         // so this may not exist - use nothrow() to handle gracefully
-        const ret = await $`git config --local --get ${config}`.nothrow()
+        const ret = await gitStatus(["config", "--local", "--get", config])
         if (ret.exitCode === 0) {
           gitConfig = ret.stdout.toString().trim()
-          await $`git config --local --unset-all ${config}`
+          await gitRun(["config", "--local", "--unset-all", config])
         }
 
         const newCredentials = Buffer.from(`x-access-token:${appToken}`, "utf8").toString("base64")
 
-        await $`git config --local ${config} "AUTHORIZATION: basic ${newCredentials}"`
-        await $`git config --global user.name "${AGENT_USERNAME}"`
-        await $`git config --global user.email "${AGENT_USERNAME}@users.noreply.github.com"`
+        await gitRun(["config", "--local", config, `AUTHORIZATION: basic ${newCredentials}`])
+        await gitRun(["config", "--global", "user.name", AGENT_USERNAME])
+        await gitRun(["config", "--global", "user.email", `${AGENT_USERNAME}@users.noreply.github.com`])
       }
 
       async function restoreGitConfig() {
         if (gitConfig === undefined) return
         const config = "http.https://github.com/.extraheader"
-        await $`git config --local ${config} "${gitConfig}"`
+        await gitRun(["config", "--local", config, gitConfig])
       }
 
       async function checkoutNewBranch(type: "issue" | "schedule" | "dispatch") {
         console.log("Checking out new branch...")
         const branch = generateBranchName(type)
-        await $`git checkout -b ${branch}`
+        await gitRun(["checkout", "-b", branch])
         return branch
       }
 
@@ -1091,8 +1118,8 @@ export const GithubRunCommand = cmd({
         const branch = pr.headRefName
         const depth = Math.max(pr.commits.totalCount, 20)
 
-        await $`git fetch origin --depth=${depth} ${branch}`
-        await $`git checkout ${branch}`
+        await gitRun(["fetch", "origin", `--depth=${depth}`, branch])
+        await gitRun(["checkout", branch])
       }
 
       async function checkoutForkBranch(pr: GitHubPullRequest) {
@@ -1102,9 +1129,9 @@ export const GithubRunCommand = cmd({
         const localBranch = generateBranchName("pr")
         const depth = Math.max(pr.commits.totalCount, 20)
 
-        await $`git remote add fork https://github.com/${pr.headRepository.nameWithOwner}.git`
-        await $`git fetch fork --depth=${depth} ${remoteBranch}`
-        await $`git checkout -b ${localBranch} fork/${remoteBranch}`
+        await gitRun(["remote", "add", "fork", `https://github.com/${pr.headRepository.nameWithOwner}.git`])
+        await gitRun(["fetch", "fork", `--depth=${depth}`, remoteBranch])
+        await gitRun(["checkout", "-b", localBranch, `fork/${remoteBranch}`])
         return localBranch
       }
 
@@ -1125,28 +1152,23 @@ export const GithubRunCommand = cmd({
       async function pushToNewBranch(summary: string, branch: string, commit: boolean, isSchedule: boolean) {
         console.log("Pushing to new branch...")
         if (commit) {
-          await $`git add .`
+          await gitRun(["add", "."])
           if (isSchedule) {
-            // No co-author for scheduled events - the schedule is operating as the repo
-            await $`git commit -m "${summary}"`
+            await commitChanges(summary)
           } else {
-            await $`git commit -m "${summary}
-
-Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
+            await commitChanges(summary, actor)
           }
         }
-        await $`git push -u origin ${branch}`
+        await gitRun(["push", "-u", "origin", branch])
       }
 
       async function pushToLocalBranch(summary: string, commit: boolean) {
         console.log("Pushing to local branch...")
         if (commit) {
-          await $`git add .`
-          await $`git commit -m "${summary}
-
-Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
+          await gitRun(["add", "."])
+          await commitChanges(summary, actor)
         }
-        await $`git push`
+        await gitRun(["push"])
       }
 
       async function pushToForkBranch(summary: string, pr: GitHubPullRequest, commit: boolean) {
@@ -1155,30 +1177,28 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         const remoteBranch = pr.headRefName
 
         if (commit) {
-          await $`git add .`
-          await $`git commit -m "${summary}
-
-Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
+          await gitRun(["add", "."])
+          await commitChanges(summary, actor)
         }
-        await $`git push fork HEAD:${remoteBranch}`
+        await gitRun(["push", "fork", `HEAD:${remoteBranch}`])
       }
 
       async function branchIsDirty(originalHead: string, expectedBranch: string) {
         console.log("Checking if branch is dirty...")
         // Detect if the agent switched branches during chat (e.g. created
         // its own branch, committed, and possibly pushed/created a PR).
-        const current = (await $`git rev-parse --abbrev-ref HEAD`).stdout.toString().trim()
+        const current = await gitText(["rev-parse", "--abbrev-ref", "HEAD"])
         if (current !== expectedBranch) {
           console.log(`Branch changed during chat: expected ${expectedBranch}, now on ${current}`)
           return { dirty: true, uncommittedChanges: false, switched: true }
         }
 
-        const ret = await $`git status --porcelain`
+        const ret = await gitStatus(["status", "--porcelain"])
         const status = ret.stdout.toString().trim()
         if (status.length > 0) {
           return { dirty: true, uncommittedChanges: true, switched: false }
         }
-        const head = (await $`git rev-parse HEAD`).stdout.toString().trim()
+        const head = await gitText(["rev-parse", "HEAD"])
         return {
           dirty: head !== originalHead,
           uncommittedChanges: false,
@@ -1190,11 +1210,11 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
       // Falls back to fetching from origin when local refs are missing
       // (common in shallow clones from actions/checkout).
       async function hasNewCommits(base: string, head: string) {
-        const result = await $`git rev-list --count ${base}..${head}`.nothrow()
+        const result = await gitStatus(["rev-list", "--count", `${base}..${head}`])
         if (result.exitCode !== 0) {
           console.log(`rev-list failed, fetching origin/${base}...`)
-          await $`git fetch origin ${base} --depth=1`.nothrow()
-          const retry = await $`git rev-list --count origin/${base}..${head}`.nothrow()
+          await gitStatus(["fetch", "origin", base, "--depth=1"])
+          const retry = await gitStatus(["rev-list", "--count", `origin/${base}..${head}`])
           if (retry.exitCode !== 0) return true // assume dirty if we can't tell
           return parseInt(retry.stdout.toString().trim()) > 0
         }
@@ -1217,7 +1237,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
           console.log(`  permission: ${permission}`)
         } catch (error) {
           console.error(`Failed to check permissions: ${error}`)
-          throw new Error(`Failed to check permissions for user ${actor}: ${error}`)
+          throw new Error(`Failed to check permissions for user ${actor}: ${error}`, { cause: error })
         }
 
         if (!["admin", "write"].includes(permission)) throw new Error(`User ${actor} does not have write permissions`)
@@ -1405,8 +1425,8 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         console.log("Fetching prompt data for issue...")
         const issueResult = await octoGraph<IssueQueryResponse>(
           `
-query($owner: String!, $repo: String!, $number: Int!) {
-  repository(owner: $owner, name: $repo) {
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
     issue(number: $number) {
       title
       body
@@ -1427,8 +1447,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
         }
       }
     }
-  }
-}`,
+      }
+    }`,
           {
             owner,
             repo,
@@ -1476,8 +1496,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
         console.log("Fetching prompt data for PR...")
         const prResult = await octoGraph<PullRequestQueryResponse>(
           `
-query($owner: String!, $repo: String!, $number: Int!) {
-  repository(owner: $owner, name: $repo) {
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       title
       body
@@ -1555,8 +1575,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
         }
       }
     }
-  }
-}`,
+      }
+    }`,
           {
             owner,
             repo,
@@ -1631,5 +1651,5 @@ query($owner: String!, $repo: String!, $number: Int!) {
         })
       }
     })
-  },
+  }),
 })

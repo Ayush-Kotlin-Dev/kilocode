@@ -26,20 +26,20 @@ Key characteristics of subagents:
 
 Kilo Code includes two built-in subagents:
 
-| Name        | Description                                                                                                                                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **general** | General-purpose agent for researching complex questions and executing multi-step tasks. Has full tool access (except todo).                                        |
+| Name | Description |
+|---|---|
+| **general** | General-purpose agent for researching complex questions and executing multi-step tasks. Has full tool access (except todo). |
 | **explore** | Fast, read-only agent for codebase exploration. Cannot modify files. Use for finding files by patterns, searching code, or answering questions about the codebase. |
 
 ## Agent Modes
 
 Every agent has a **mode** that determines how it can be used:
 
-| Mode       | Description                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------- |
-| `primary`  | User-facing agents you interact with directly. Switch between them with **Tab**.            |
-| `subagent` | Only invocable via the Task tool or `@` mentions. Not available as a primary agent.         |
-| `all`      | Can function as both a primary agent and a subagent. This is the default for custom agents. |
+| Mode | Description |
+|---|---|
+| `primary` | User-facing agents you interact with directly. Switch between them with **Tab**. |
+| `subagent` | Only invocable via the Task tool or `@` mentions. Not available as a primary agent. |
+| `all` | Can function as both a primary agent and a subagent. This is the default for custom agents. |
 
 ## Configuring Custom Subagents
 
@@ -148,19 +148,19 @@ kilo agent create \
 
 The following options are available when configuring a subagent:
 
-| Option        | Type                               | Description                                                                                                                                          |
-| ------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `description` | `string`                           | What the agent does and when to use it. Shown to primary agents to help them decide which subagent to invoke.                                        |
-| `mode`        | `"subagent" \| "primary" \| "all"` | How the agent can be used. Defaults to `all` for custom agents.                                                                                      |
-| `model`       | `string`                           | Override the model for this agent (format: `provider/model-id`). If not set, subagents inherit the model of the invoking primary agent.              |
-| `prompt`      | `string`                           | Custom system prompt. In JSON, can use `{file:./path}` syntax. In markdown, the body is the prompt.                                                  |
-| `temperature` | `number`                           | Controls response randomness (0.0-1.0). Lower = more deterministic.                                                                                  |
-| `top_p`       | `number`                           | Alternative to temperature for controlling response diversity (0.0-1.0).                                                                             |
-| `permission`  | `object`                           | Controls tool access. See [Permissions](#permissions) below.                                                                                         |
-| `hidden`      | `boolean`                          | If `true`, hides the subagent from the `@` autocomplete menu. It can still be invoked by agents via the Task tool. Only applies to `mode: subagent`. |
-| `steps`       | `number`                           | Maximum agentic iterations before forcing a text-only response. Useful for cost control.                                                             |
-| `color`       | `string`                           | Visual color in the UI. Accepts hex (`#FF5733`) or theme names (`primary`, `accent`, `error`, etc.).                                                 |
-| `disable`     | `boolean`                          | Set to `true` to disable the agent entirely.                                                                                                         |
+| Option | Type | Description |
+|---|---|---|
+| `description` | `string` | What the agent does and when to use it. Shown to primary agents to help them decide which subagent to invoke. |
+| `mode` | `"subagent" \| "primary" \| "all"` | How the agent can be used. Defaults to `all` for custom agents. |
+| `model` | `string` | Override the model for this agent (format: `provider/model-id`). If not set, subagents inherit the model of the invoking primary agent. |
+| `prompt` | `string` | Custom system prompt. In JSON, can use `{file:./path}` syntax. In markdown, the body is the prompt. |
+| `temperature` | `number` | Controls response randomness (0.0-1.0). Lower = more deterministic. |
+| `top_p` | `number` | Alternative to temperature for controlling response diversity (0.0-1.0). |
+| `permission` | `object` | Controls tool access. See [Permissions](#permissions) below. |
+| `hidden` | `boolean` | If `true`, hides the subagent from the `@` autocomplete menu. It can still be invoked by agents via the Task tool. Only applies to `mode: subagent`. |
+| `steps` | `number` | Maximum agentic iterations before forcing a text-only response. Useful for cost control. |
+| `color` | `string` | Visual color in the UI. Accepts hex (`#FF5733`) or theme names (`primary`, `accent`, `error`, etc.). |
+| `disable` | `boolean` | Set to `true` to disable the agent entirely. |
 
 Any additional options not listed above are passed through to the model provider, allowing you to use provider-specific parameters like `reasoningEffort` for OpenAI models.
 
@@ -190,7 +190,7 @@ The `permission` field controls what tools the subagent can use. Each tool permi
 }
 ```
 
-For bash commands, you can use glob patterns to set permissions per command. Rules are evaluated in order, with the **last matching rule winning**.
+For bash commands, you can use glob patterns to set permissions per command. Rules are evaluated in order, with the **last matching rule winning**. See [Agent Permissions](/docs/customize/agent-permissions) for rule precedence, shell command patterns, path matching, and sensitive-file behavior.
 
 You can also control which subagents an agent can invoke via `permission.task`:
 

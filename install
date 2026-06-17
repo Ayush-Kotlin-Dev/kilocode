@@ -21,8 +21,8 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash
-    curl -fsSL https://raw.githubusercontent.com/Ayush-Kotlin-Dev/kilocode/main/install | bash -s -- --version 1.0.180
+    curl -fsSL https://kilo.ai/cli/install | bash
+    curl -fsSL https://kilo.ai/cli/install | bash -s -- --version 1.0.180
     ./install --binary /path/to/kilo
 EOF
 }
@@ -167,45 +167,7 @@ else
       target="$target-musl"
     fi
 
-    targets=()
-
-    add_target() {
-        local value="$1"
-        local item=""
-        for item in "${targets[@]:-}"; do
-            if [[ "$item" == "$value" ]]; then
-                return
-            fi
-        done
-        targets+=("$value")
-    }
-
-    add_target "$target"
-
-    if [ "$os" = "linux" ] && [ "$arch" = "x64" ]; then
-        if [ "$is_musl" = "true" ] && [ "$needs_baseline" = "true" ]; then
-            add_target "$os-$arch-musl"
-            add_target "$os-$arch-baseline"
-            add_target "$os-$arch"
-        elif [ "$is_musl" = "true" ]; then
-            add_target "$os-$arch"
-        elif [ "$needs_baseline" = "true" ]; then
-            add_target "$os-$arch"
-        fi
-    fi
-
-    if [ "$os" = "linux" ] && [ "$arch" = "arm64" ] && [ "$is_musl" = "true" ]; then
-        add_target "$os-$arch"
-    fi
-
-    if [ "$os" = "darwin" ] && [ "$arch" = "x64" ] && [ "$needs_baseline" = "true" ]; then
-        add_target "$os-$arch"
-    fi
-
-    filenames=()
-    for item in "${targets[@]}"; do
-        filenames+=("$APP-$item$archive_ext")
-    done
+    filename="$APP-$target$archive_ext"
 
 
     if [ "$os" = "linux" ]; then
@@ -221,7 +183,8 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        specific_version=$(curl -s https://api.github.com/repos/Ayush-Kotlin-Dev/kilocode/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+        url="https://github.com/Kilo-Org/kilocode/releases/latest/download/$filename"
+        specific_version=$(curl -s https://api.github.com/repos/Kilo-Org/kilocode/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 
         if [[ $? -ne 0 || -z "$specific_version" ]]; then
             echo -e "${RED}Failed to fetch version information${NC}"
@@ -230,18 +193,17 @@ else
     else
         # Strip leading 'v' if present
         requested_version="${requested_version#v}"
+        url="https://github.com/Kilo-Org/kilocode/releases/download/v${requested_version}/$filename"
         specific_version=$requested_version
 
         # Verify the release exists before downloading
-        http_status=$(curl -sI -o /dev/null -w "%{http_code}" "https://github.com/Ayush-Kotlin-Dev/kilocode/releases/tag/v${requested_version}")
+        http_status=$(curl -sI -o /dev/null -w "%{http_code}" "https://github.com/Kilo-Org/kilocode/releases/tag/v${requested_version}")
         if [ "$http_status" = "404" ]; then
             echo -e "${RED}Error: Release v${requested_version} not found${NC}"
-            echo -e "${MUTED}Available releases: https://github.com/Ayush-Kotlin-Dev/kilocode/releases${NC}"
+            echo -e "${MUTED}Available releases: https://github.com/Kilo-Org/kilocode/releases${NC}"
             exit 1
         fi
     fi
-
-    base_url="https://github.com/Ayush-Kotlin-Dev/kilocode/releases/download/v${specific_version}"
 fi
 
 print_message() {
@@ -366,102 +328,30 @@ download_with_progress() {
     return $ret
 }
 
-download_release() {
-    local url="$1"
-    local output="$2"
-
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$output"; then
-        curl -fsSL -o "$output" "$url"
-    fi
-}
-
-verify_release() {
-    local file="$1"
-    local name="$2"
-    local dir="$3"
-    local sums="$dir/kilo-checksums.txt"
-    local url="${base_url}/kilo-checksums.txt"
-    local expected=""
-    local actual=""
-
-    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
-        return 0
-    fi
-
-    if ! curl -fsSL -o "$sums" "$url"; then
-        print_message warning "${MUTED}Checksum file not found, skipping verification${NC}"
-        return 0
-    fi
-
-    expected=$(grep "[[:space:]]$name\$" "$sums" | awk '{print $1}' | head -n 1)
-    if [ -z "$expected" ]; then
-        print_message warning "${MUTED}Checksum entry missing for ${NC}$name${MUTED}, skipping verification${NC}"
-        return 0
-    fi
-
-    if command -v sha256sum >/dev/null 2>&1; then
-        actual=$(sha256sum "$file" | awk '{print $1}')
-    else
-        actual=$(shasum -a 256 "$file" | awk '{print $1}')
-    fi
-
-    if [ "$actual" != "$expected" ]; then
-        echo -e "${RED}Checksum verification failed for ${name}${NC}"
-        exit 1
-    fi
-}
-
 download_and_install() {
     # kilocode_change start
     print_message info "\n${MUTED}Installing ${NC}Kilo Code ${MUTED}version: ${NC}$specific_version"
     local tmp_dir="${TMPDIR:-/tmp}/kilo_install_$$"
-    local archive=""
-    local name=""
     # kilocode_change end
     mkdir -p "$tmp_dir"
 
-    for name in "${filenames[@]}"; do
-        local url="${base_url}/${name}"
-        local path="$tmp_dir/$name"
-
-        print_message info "${MUTED}Trying ${NC}$name"
-        if download_release "$url" "$path"; then
-            archive="$path"
-            break
-        fi
-
-        rm -f "$path"
-    done
-
-    if [ -z "$archive" ]; then
-        echo -e "${RED}No release asset matched this system.${NC}"
-        echo -e "${MUTED}Tried:${NC} ${filenames[*]}"
-        echo -e "${MUTED}Release page: ${NC}https://github.com/Ayush-Kotlin-Dev/kilocode/releases/tag/v${specific_version}"
-        exit 1
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
+        # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
+        curl -f# -L -o "$tmp_dir/$filename" "$url" # kilocode_change
     fi
-
-    verify_release "$archive" "$name" "$tmp_dir"
 
     if [ "$os" = "linux" ]; then
-        tar -xzf "$archive" -C "$tmp_dir"
+        tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
     else
-        unzip -q "$archive" -d "$tmp_dir"
-    fi
-
-    local bin_path=""
-    if [ -f "$tmp_dir/kilo" ]; then
-        bin_path="$tmp_dir/kilo"
-    elif [ -f "$tmp_dir/bin/kilo" ]; then
-        bin_path="$tmp_dir/bin/kilo"
-    fi
-
-    if [ -z "$bin_path" ]; then
-        echo -e "${RED}Installed archive did not contain a usable kilo binary.${NC}"
-        exit 1
+        unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
     fi
 
     # kilocode_change start
-    mv "$bin_path" "$INSTALL_DIR"
+    mv "$tmp_dir/kilo" "$INSTALL_DIR"
+    rm -rf "${INSTALL_DIR}/tree-sitter"
+    if [ -d "$tmp_dir/tree-sitter" ]; then
+        mv "$tmp_dir/tree-sitter" "$INSTALL_DIR"
+    fi
     chmod 755 "${INSTALL_DIR}/kilo"
     # kilocode_change end
     rm -rf "$tmp_dir"
@@ -499,6 +389,57 @@ add_to_path() {
     fi
 }
 
+# Persistently add $INSTALL_DIR to the Windows user PATH via the registry.
+# Works from Git Bash (MINGW64), MSYS2, and Cygwin.
+# Converts the MSYS/Cygwin path to native Windows form so that cmd and
+# PowerShell also see the entry.
+add_to_windows_path() {
+    local win_install_dir
+    if command -v cygpath >/dev/null 2>&1; then
+        win_install_dir=$(cygpath -w "$INSTALL_DIR")
+    else
+        # Fallback: naive conversion  /c/Users/... -> C:\Users\...
+        win_install_dir=$(echo "$INSTALL_DIR" | sed -e 's|^/\([a-zA-Z]\)/|\1:\\|' -e 's|/|\\|g')
+    fi
+
+    # Escape single-quotes for PowerShell single-quoted strings ('' is the escape sequence)
+    local win_install_dir_ps="${win_install_dir//\'/\'\'}"
+
+    local ps_cmd
+    ps_cmd=$(cat <<EOFPS
+\$kiloPath = '$win_install_dir_ps'
+\$currentPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+\$pathParts = if ([string]::IsNullOrEmpty(\$currentPath)) { @() } else { \$currentPath -split ';' }
+if (\$pathParts -notcontains \$kiloPath) {
+    \$newPath = if ([string]::IsNullOrEmpty(\$currentPath)) { \$kiloPath } else { "\$currentPath;\$kiloPath" }
+    [Environment]::SetEnvironmentVariable('Path', \$newPath, 'User')
+    Write-Output 'added'
+}
+EOFPS
+)
+
+    local ps_output
+    if command -v powershell.exe >/dev/null 2>&1; then
+        ps_output=$(powershell.exe -NoProfile -NonInteractive -Command "$ps_cmd" 2>/dev/null) || return 1
+    elif command -v pwsh >/dev/null 2>&1; then
+        ps_output=$(pwsh -NoProfile -NonInteractive -Command "$ps_cmd" 2>/dev/null) || return 1
+    else
+        return 1
+    fi
+
+    if [[ "$ps_output" == *"added"* ]]; then
+        print_message info "${MUTED}Successfully added ${NC}kilo ${MUTED}to Windows user PATH${NC}"
+    fi
+
+    # Also add to the current bash session so `kilo` works immediately
+    # without the user needing to open a new terminal.
+    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+        export PATH="$INSTALL_DIR:$PATH"
+    fi
+
+    return 0
+}
+
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 
 current_shell=$(basename "$SHELL")
@@ -525,6 +466,13 @@ case $current_shell in
 esac
 
 if [[ "$no_modify_path" != "true" ]]; then
+    # Detect if we are running on Windows (MINGW, MSYS, Cygwin) regardless
+    # of whether the binary was installed from download or --binary.
+    _running_on_windows=false
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) _running_on_windows=true ;;
+    esac
+
     config_file=""
     for file in $config_files; do
         if [[ -f $file ]]; then
@@ -533,7 +481,12 @@ if [[ "$no_modify_path" != "true" ]]; then
         fi
     done
 
-    if [[ -z $config_file ]]; then
+    if [[ "$_running_on_windows" == "true" ]] && add_to_windows_path; then
+        # Handled via the Windows user-level PATH in the registry.
+        # The change is visible in new cmd / PowerShell / Git Bash sessions.
+        # We also exported it into the current session above.
+        :
+    elif [[ -z $config_file ]]; then
         print_message warning "No config file found for $current_shell. You may need to manually add to PATH:"
         print_message info "  export PATH=$INSTALL_DIR:\$PATH"
     elif [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -568,10 +521,46 @@ if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
 fi
 
 # kilocode_change start
+logo_supports() {
+    case "${KILO_UNICODE_LOGO:-}" in
+        1|true|TRUE|yes|YES|on|ON)
+            return 0
+        ;;
+        0|false|FALSE|no|NO|off|OFF)
+            return 1
+        ;;
+    esac
+
+    if [ "${TERM:-}" = "dumb" ]; then
+        return 1
+    fi
+
+    if [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_CONNECTION:-}" ]; then
+        return 1
+    fi
+
+    if [ -n "${ConEmuPID:-}" ] || [ -n "${ANSICON:-}" ]; then
+        return 1
+    fi
+
+    return 0
+}
+
+print_logo() {
+    if logo_supports; then
+        echo -e "██  ██ ██🬺🬏   ██  ██   ██🬺🬏     ████ ██     ██🬺🬏   "
+        echo -e "████🬺🬏   ██   ██     ██  ██   ██     ██       ██   "
+        echo -e "██  ██ ██████ 🬁🬬████ 🬁🬬██     🬁🬬████ 🬁🬬████ ██████ "
+        return
+    fi
+
+    echo -e "██  ██ ████   ██  ██   ███      ████ ██     ████   "
+    echo -e "████     ██   ██     ██  ██   ██     ██       ██   "
+    echo -e "██  ██ ██████ ██████   ██       ████ ██████ ██████ "
+}
+
 echo -e ""
-echo -e "██ ▄█▀ ██ ██     ▄████▄   ▄█████ ██     ██ "
-echo -e "████   ██ ██     ██  ██   ██     ██     ██ "
-echo -e "██ ▀█▄ ██ ██████ ▀████▀   ▀█████ ██████ ██ "
+print_logo
 echo -e ""
 echo -e ""
 echo -e "${MUTED}Kilo includes free models so you can start immediately:${NC}"

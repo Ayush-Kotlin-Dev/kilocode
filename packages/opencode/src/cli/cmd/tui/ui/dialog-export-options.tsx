@@ -2,8 +2,8 @@ import { TextareaRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
-import { onMount, Show, type JSX } from "solid-js"
-import { useKeyboard } from "@opentui/solid"
+import { onMount, Show } from "solid-js"
+import { useBindings } from "../keymap"
 
 export type DialogExportOptionsProps = {
   defaultFilename: string
@@ -33,37 +33,44 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
     active: "filename" as "filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving",
   })
 
-  useKeyboard((evt) => {
-    if (evt.name === "return") {
-      props.onConfirm?.({
-        filename: textarea.plainText,
-        thinking: store.thinking,
-        toolDetails: store.toolDetails,
-        assistantMetadata: store.assistantMetadata,
-        openWithoutSaving: store.openWithoutSaving,
-      })
-    }
-    if (evt.name === "tab") {
-      const order: Array<"filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving"> = [
-        "filename",
-        "thinking",
-        "toolDetails",
-        "assistantMetadata",
-        "openWithoutSaving",
-      ]
-      const currentIndex = order.indexOf(store.active)
-      const nextIndex = (currentIndex + 1) % order.length
-      setStore("active", order[nextIndex])
-      evt.preventDefault()
-    }
-    if (evt.name === "space" || evt.name === " ") {
-      if (store.active === "thinking") setStore("thinking", !store.thinking)
-      if (store.active === "toolDetails") setStore("toolDetails", !store.toolDetails)
-      if (store.active === "assistantMetadata") setStore("assistantMetadata", !store.assistantMetadata)
-      if (store.active === "openWithoutSaving") setStore("openWithoutSaving", !store.openWithoutSaving)
-      evt.preventDefault()
-    }
-  })
+  useBindings(() => ({
+    bindings: [
+      {
+        key: "tab",
+        desc: "Next export option",
+        group: "Dialog",
+        cmd: () => {
+          const order: Array<"filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving"> = [
+            "filename",
+            "thinking",
+            "toolDetails",
+            "assistantMetadata",
+            "openWithoutSaving",
+          ]
+          const currentIndex = order.indexOf(store.active)
+          const nextIndex = (currentIndex + 1) % order.length
+          setStore("active", order[nextIndex])
+        },
+      },
+    ],
+  }))
+
+  useBindings(() => ({
+    enabled: store.active !== "filename",
+    bindings: [
+      {
+        key: "space",
+        desc: "Toggle export option",
+        group: "Dialog",
+        cmd: () => {
+          if (store.active === "thinking") setStore("thinking", !store.thinking)
+          if (store.active === "toolDetails") setStore("toolDetails", !store.toolDetails)
+          if (store.active === "assistantMetadata") setStore("assistantMetadata", !store.assistantMetadata)
+          if (store.active === "openWithoutSaving") setStore("openWithoutSaving", !store.openWithoutSaving)
+        },
+      },
+    ],
+  }))
 
   onMount(() => {
     dialog.setSize("medium")
@@ -99,10 +106,13 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
             })
           }}
           height={3}
-          keyBindings={[{ name: "return", action: "submit" }]}
-          ref={(val: TextareaRenderable) => (textarea = val)}
+          ref={(val: TextareaRenderable) => {
+            textarea = val
+            val.traits = { status: "FILENAME" }
+          }}
           initialValue={props.defaultFilename}
           placeholder="Enter filename"
+          placeholderColor={theme.textMuted}
           textColor={theme.text}
           focusedTextColor={theme.text}
           cursorColor={theme.text}
@@ -114,7 +124,13 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           gap={2}
           paddingLeft={1}
           backgroundColor={store.active === "thinking" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "thinking")}
+          onMouseUp={
+            () => {
+              // kilocode_change start
+              setStore("active", "thinking")
+              setStore("thinking", !store.thinking)
+            } /* kilocode_change end */
+          }
         >
           <text fg={store.active === "thinking" ? theme.primary : theme.textMuted}>
             {store.thinking ? "[x]" : "[ ]"}
@@ -126,7 +142,13 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           gap={2}
           paddingLeft={1}
           backgroundColor={store.active === "toolDetails" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "toolDetails")}
+          onMouseUp={
+            () => {
+              // kilocode_change start
+              setStore("active", "toolDetails")
+              setStore("toolDetails", !store.toolDetails)
+            } /* kilocode_change end */
+          }
         >
           <text fg={store.active === "toolDetails" ? theme.primary : theme.textMuted}>
             {store.toolDetails ? "[x]" : "[ ]"}
@@ -138,7 +160,13 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           gap={2}
           paddingLeft={1}
           backgroundColor={store.active === "assistantMetadata" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "assistantMetadata")}
+          onMouseUp={
+            () => {
+              // kilocode_change start
+              setStore("active", "assistantMetadata")
+              setStore("assistantMetadata", !store.assistantMetadata)
+            } /* kilocode_change end */
+          }
         >
           <text fg={store.active === "assistantMetadata" ? theme.primary : theme.textMuted}>
             {store.assistantMetadata ? "[x]" : "[ ]"}
@@ -150,7 +178,13 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           gap={2}
           paddingLeft={1}
           backgroundColor={store.active === "openWithoutSaving" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "openWithoutSaving")}
+          onMouseUp={
+            () => {
+              // kilocode_change start
+              setStore("active", "openWithoutSaving")
+              setStore("openWithoutSaving", !store.openWithoutSaving)
+            } /* kilocode_change end */
+          }
         >
           <text fg={store.active === "openWithoutSaving" ? theme.primary : theme.textMuted}>
             {store.openWithoutSaving ? "[x]" : "[ ]"}

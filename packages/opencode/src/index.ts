@@ -2,84 +2,79 @@ import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { RunCommand } from "./cli/cmd/run"
 import { GenerateCommand } from "./cli/cmd/generate"
-import { Log } from "./util/log"
-import { AuthCommand } from "./cli/cmd/auth"
+import * as Log from "@opencode-ai/core/util/log"
+// import { ConsoleCommand } from "./cli/cmd/account" // kilocode_change - reserve `kilo console` for local settings
+import { ProvidersCommand } from "./cli/cmd/providers"
 import { AgentCommand } from "./cli/cmd/agent"
 import { UpgradeCommand } from "./cli/cmd/upgrade"
 import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
 import { Installation } from "./installation"
-import { NamedError } from "@opencode-ai/util/error"
+import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { NamedError } from "@opencode-ai/core/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
-import { WorkspaceServeCommand } from "./cli/cmd/workspace-serve"
-import { Filesystem } from "./util/filesystem"
+import { Filesystem } from "@/util/filesystem"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
 import { McpCommand } from "./cli/cmd/mcp"
-// import { GithubCommand } from "./cli/cmd/github" // kilocode_change
+import { GithubCommand } from "./cli/cmd/github"
 import { ExportCommand } from "./cli/cmd/export"
 import { ImportCommand } from "./cli/cmd/import"
 import { AttachCommand } from "./cli/cmd/tui/attach"
 import { TuiThreadCommand } from "./cli/cmd/tui/thread"
 import { AcpCommand } from "./cli/cmd/acp"
 import { EOL } from "os"
-// import { WebCommand } from "./cli/cmd/web" // kilocode_change (Disabled unsupported opencode web UI)
+import { WebCommand } from "./cli/cmd/web"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
-import { RemoteCommand } from "./cli/cmd/remote" // kilocode_change
-// kilocode_change start - Import telemetry, instance disposal, and legacy migration
-import { Telemetry } from "@kilocode/kilo-telemetry"
-import { Instance } from "./project/instance" // kilocode_change
-import { migrateLegacyKiloAuth, ENV_FEATURE, ENV_VERSION } from "@kilocode/kilo-gateway"
-
-// kilocode_change - set feature for tracking. 'serve' is spawned by other services
-// (extension, cloud) which set their own KILOCODE_FEATURE env var. Direct CLI use
-// (any command other than 'serve') is tagged as 'cli'. If 'serve' is spawned without
-// the env var, it gets 'unknown' so the misconfiguration is visible in data.
-if (!process.env[ENV_FEATURE]) {
-  const isServe = process.argv.includes("serve")
-  process.env[ENV_FEATURE] = isServe ? "unknown" : "cli"
-}
-
-// kilocode_change - set version so kilo-gateway can include it in the editor name header
-if (!process.env[ENV_VERSION]) {
-  process.env[ENV_VERSION] = Installation.VERSION
-}
-import { Config } from "./config/config"
-import { Auth } from "./auth"
-// kilocode_change end
 import { DbCommand } from "./cli/cmd/db"
 import path from "path"
-import { Global } from "./global"
-import { JsonMigration } from "./storage/json-migration"
-import { Database } from "./storage/db"
+import { Global } from "@opencode-ai/core/global"
+import { JsonMigration } from "@/storage/json-migration"
+import { Database } from "@/storage/db"
+import { errorMessage } from "./util/error"
+import { PluginCommand } from "./cli/cmd/plug"
+import { Heap } from "./cli/heap"
+import { drizzle } from "drizzle-orm/bun-sqlite"
+import { ensureProcessMetadata } from "@opencode-ai/core/util/opencode-process"
+import { isRecord } from "@/util/record"
+import { KiloCli } from "@/kilocode/cli/setup" // kilocode_change
+
+const processMetadata = ensureProcessMetadata("main")
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
-    e: e instanceof Error ? e.message : e,
+    e: errorMessage(e),
   })
 })
 
 process.on("uncaughtException", (e) => {
   Log.Default.error("exception", {
-    e: e instanceof Error ? e.message : e,
+    e: errorMessage(e),
   })
 })
 
-// Ensure the process exits on terminal hangup (eg. closing the terminal tab).
-// Without this, long-running commands like `serve` block on a never-resolving
-// promise and survive as orphaned processes.
-process.on("SIGHUP", () => process.exit())
+const args = hideBin(process.argv)
 
-let cli = yargs(hideBin(process.argv))
+function show(out: string) {
+  const text = out.trimStart()
+  if (!text.startsWith("opencode ")) {
+    process.stderr.write(UI.logo() + EOL + EOL)
+    process.stderr.write(text)
+    return
+  }
+  process.stderr.write(out)
+}
+
+let cli = yargs(args) // kilocode_change
   .parserConfiguration({ "populate--": true })
   .scriptName("kilo") // kilocode_change
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
-  .version("version", "show version number", Installation.VERSION)
+  .version("version", "show version number", InstallationVersion)
   .alias("version", "v")
   .option("print-logs", {
     describe: "print logs to stderr",
@@ -90,7 +85,15 @@ let cli = yargs(hideBin(process.argv))
     type: "string",
     choices: ["DEBUG", "INFO", "WARN", "ERROR"],
   })
+  .option("pure", {
+    describe: "run without external plugins",
+    type: "boolean",
+  })
   .middleware(async (opts) => {
+    if (opts.pure) {
+      process.env.KILO_PURE = "1"
+    }
+
     await Log.init({
       print: process.argv.includes("--print-logs"),
       dev: Installation.isLocal(),
@@ -101,45 +104,20 @@ let cli = yargs(hideBin(process.argv))
       })(),
     })
 
+    Heap.start()
+
     process.env.AGENT = "1"
-    process.env.KILO = "1"
+    process.env.OPENCODE = "1"
     process.env.KILO_PID = String(process.pid)
 
     Log.Default.info("opencode", {
-      version: Installation.VERSION,
+      version: InstallationVersion,
       args: process.argv.slice(2),
+      process_role: processMetadata.processRole,
+      run_id: processMetadata.runID,
     })
 
-    // kilocode_change start - Initialize telemetry
-    Log.Default.info("telemetry", { step: "getting global config" })
-    const globalCfg = await Config.getGlobal()
-    Log.Default.info("telemetry", { step: "initializing telemetry" })
-    await Telemetry.init({
-      dataPath: Global.Path.data,
-      version: Installation.VERSION,
-      enabled: globalCfg.experimental?.openTelemetry !== false,
-    })
-
-    Log.Default.info("telemetry", { step: "migrating legacy auth" })
-    // Migrate legacy Kilo CLI auth if needed
-    await migrateLegacyKiloAuth(
-      async () => (await Auth.get("kilo")) !== undefined,
-      async (auth) => Auth.set("kilo", auth),
-    )
-
-    Log.Default.info("telemetry", { step: "getting kilo auth" })
-    const kiloAuth = await Auth.get("kilo")
-    if (kiloAuth) {
-      Log.Default.info("telemetry", { step: "updating identity" })
-      const token = kiloAuth.type === "oauth" ? kiloAuth.access : kiloAuth.key
-      const accountId = kiloAuth.type === "oauth" ? kiloAuth.accountId : undefined
-      await Telemetry.updateIdentity(token, accountId)
-    }
-
-    Log.Default.info("telemetry", { step: "tracking cli start" })
-    Telemetry.trackCliStart()
-    Log.Default.info("telemetry", { step: "completed telemetry section" })
-    // kilocode_change end
+    await KiloCli.bootstrap() // kilocode_change - env tagging, telemetry init, legacy auth migration
 
     const marker = path.join(Global.Path.data, "kilo.db")
     if (!(await Filesystem.exists(marker))) {
@@ -152,7 +130,7 @@ let cli = yargs(hideBin(process.argv))
       let last = -1
       if (tty) process.stderr.write("\x1b[?25l")
       try {
-        await JsonMigration.run(Database.Client().$client, {
+        await JsonMigration.run(drizzle({ client: Database.Client().$client }), {
           progress: (event) => {
             const percent = Math.floor((event.current / event.total) * 100)
             if (percent === last && event.current !== event.total) return
@@ -178,7 +156,7 @@ let cli = yargs(hideBin(process.argv))
       process.stderr.write("Database migration complete." + EOL)
     }
   })
-  .usage("\n" + UI.logo())
+  .usage("")
   .completion("completion", "generate shell completion script")
   .command(AcpCommand)
   .command(McpCommand)
@@ -187,27 +165,27 @@ let cli = yargs(hideBin(process.argv))
   .command(RunCommand)
   .command(GenerateCommand)
   .command(DebugCommand)
-  .command(AuthCommand)
+  // kilocode_change - upstream account console intentionally not registered; KiloConsole is added by KiloCli.register
+  .command(ProvidersCommand)
   .command(AgentCommand)
   .command(UpgradeCommand)
   .command(UninstallCommand)
   .command(ServeCommand)
-  // .command(WebCommand) // kilocode_change (Disabled unsupported opencode web UI)
+  .command(WebCommand)
   .command(ModelsCommand)
   .command(StatsCommand)
   .command(ExportCommand)
   .command(ImportCommand)
-  // .command(GithubCommand) // kilocode_change (Disabled until backend is ready)
+  .command(GithubCommand)
   .command(PrCommand)
   .command(SessionCommand)
-  .command(RemoteCommand) // kilocode_change
+  .command(PluginCommand)
   .command(DbCommand)
 
-if (Installation.isLocal()) {
-  cli = cli.command(WorkspaceServeCommand)
-}
-
+// kilocode_change start - register Kilo-specific commands after the upstream chain
+cli = KiloCli.register(cli)
 cli = cli
+  // kilocode_change end
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
@@ -215,7 +193,7 @@ cli = cli
       msg?.startsWith("Invalid values:")
     ) {
       if (err) throw err
-      cli.showHelp("log")
+      cli.showHelp(show)
     }
     if (err) throw err
     process.exit(1)
@@ -223,16 +201,17 @@ cli = cli
   .strict()
 
 try {
-  await cli.parse()
+  if (args.includes("-h") || args.includes("--help")) {
+    await cli.parse(args, (err: Error | undefined, _argv: unknown, out: string) => {
+      if (err) throw err
+      if (!out) return
+      show(out)
+    })
+  } else {
+    await cli.parse()
+  }
 } catch (e) {
   let data: Record<string, any> = {}
-  if (e instanceof NamedError) {
-    const obj = e.toObject()
-    Object.assign(data, {
-      ...obj.data,
-    })
-  }
-
   if (e instanceof Error) {
     Object.assign(data, {
       name: e.name,
@@ -240,6 +219,16 @@ try {
       cause: e.cause?.toString(),
       stack: e.stack,
     })
+  }
+
+  if (e instanceof NamedError) {
+    const obj = e.toObject()
+    if (isRecord(obj.data)) {
+      for (const [key, value] of Object.entries(obj.data)) {
+        if (key === "name" || key === "stack" || key === "cause") continue
+        data[key] = value
+      }
+    }
   }
 
   if (e instanceof ResolveMessage) {
@@ -258,17 +247,11 @@ try {
   if (formatted) UI.error(formatted)
   if (formatted === undefined) {
     UI.error("Unexpected error, check log file at " + Log.file() + " for more details" + EOL)
-    process.stderr.write((e instanceof Error ? e.message : String(e)) + EOL)
+    process.stderr.write(errorMessage(e) + EOL)
   }
   process.exitCode = 1
 } finally {
-  // kilocode_change start - Track CLI exit and shutdown telemetry
-  const exitCode = typeof process.exitCode === "number" ? process.exitCode : undefined
-  Telemetry.trackCliExit(exitCode)
-  await Telemetry.shutdown()
-  // kilocode_change end
-
-  await Instance.disposeAll() // kilocode_change - safety net disposal (no-op if already disposed)
+  await KiloCli.shutdown() // kilocode_change - telemetry/session-export shutdown + instance disposal
 
   // Some subprocesses don't react properly to SIGTERM and similar signals.
   // Most notably, some docker-container-based MCP servers don't handle such signals unless

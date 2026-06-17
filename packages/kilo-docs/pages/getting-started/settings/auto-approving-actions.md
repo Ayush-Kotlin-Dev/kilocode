@@ -24,11 +24,11 @@ The UI reads and writes to the same `kilo.jsonc` config files used by the CLI, s
 
 Each tool permission can be set to one of three values:
 
-| Value     | Behavior                                                  |
-| --------- | --------------------------------------------------------- |
-| `"allow"` | The tool runs automatically without prompting             |
-| `"ask"`   | Kilo pauses and asks for approval before running the tool |
-| `"deny"`  | The tool is blocked entirely                              |
+| Value | Behavior |
+|---|---|
+| `"allow"` | The tool runs automatically without prompting |
+| `"ask"` | Kilo pauses and asks for approval before running the tool |
+| `"deny"` | The tool is blocked entirely |
 
 When no rule matches a permission check, the default action is `ask`.
 
@@ -36,33 +36,43 @@ When no rule matches a permission check, the default action is `ask`.
 
 The Auto Approve tab lists the following tool-specific permissions. Some tools are grouped together in the UI and share a single permission level:
 
-| Permission                 | Controls                                               |
-| -------------------------- | ------------------------------------------------------ |
-| `external_directory`       | Accessing files outside the project directory          |
-| `bash`                     | Executing shell commands                               |
-| `read`                     | Reading file contents                                  |
-| `edit`                     | Editing existing files                                 |
-| `glob`                     | File pattern matching / searching by name              |
-| `grep`                     | Searching file contents by regex                       |
-| `list`                     | Listing directory contents                             |
-| `task`                     | Launching sub-agents                                   |
-| `skill`                    | Loading specialized skills                             |
-| `lsp`                      | Language server protocol operations                    |
-| `todoread` / `todowrite`   | Reading and updating the todo list                     |
-| `websearch` / `codesearch` | Performing web or code searches                        |
-| `webfetch`                 | Fetching content from URLs                             |
-| `doom_loop`                | Allowing the agent to continue after repeated failures |
+| Permission | Controls |
+|---|---|
+| `external_directory` | Accessing files outside the project directory |
+| `bash` | Executing shell commands |
+| `read` | Reading file contents |
+| `edit` | Editing existing files |
+| `glob` | File pattern matching / searching by name |
+| `grep` | Searching file contents by regex |
+| `task` | Launching sub-agents |
+| `agent_manager` | Starting Agent Manager local or worktree sessions |
+| `skill` | Loading specialized skills |
+| `lsp` | Language server protocol operations |
+| `todoread` / `todowrite` | Reading and updating the todo list |
+| `websearch` | Performing web searches |
+| `webfetch` | Fetching content from URLs |
+| `doom_loop` | Allowing the agent to continue after repeated failures |
 
 ## Runtime Permission Requests
 
 When a tool is set to `"ask"`, Kilo pauses and displays a permission prompt with two options:
 
-| Option   | Behavior                       |
-| -------- | ------------------------------ |
-| **Run**  | Allow this specific invocation |
+| Option | Behavior |
+|---|---|
+| **Run** | Allow this specific invocation |
 | **Deny** | Block this specific invocation |
 
+Use the shield button in the prompt controls to toggle runtime auto-approve for permission prompts without opening Settings. When enabled, the shield is highlighted and pending permission prompts are approved automatically. The runtime state stays synced across the sidebar, open Kilo tabs, and Agent Manager session views.
+
 Expand **Manage Auto-Approve Rules** to add commands or patterns to your allowed or denied lists. These rules are then appended to the bottom of the approval rules in settings and the config file.
+
+For the `agent_manager` tool, runtime approvals use the requested mode as the pattern: `worktree` or `local`.
+
+## MCP Tool Permissions
+
+MCP tools use the same `allow` / `ask` / `deny` permission system as built-in tools. Each MCP tool's permission key is its namespaced name: `{server}_{tool}` (e.g. `github_create_pull_request`). You can use glob patterns like `github_*` for broad rules.
+
+For full details and examples, see [MCP Tool Permissions](/docs/automate/mcp/using-in-kilo-code#auto-approve-tools).
 
 ## Defaults
 
@@ -83,11 +93,11 @@ The CLI uses a granular, per-tool permission system configured in `kilo.jsonc`. 
 
 Each tool permission can be set to one of three values:
 
-| Value     | Behavior                                                  |
-| --------- | --------------------------------------------------------- |
-| `"allow"` | The tool runs automatically without prompting             |
-| `"ask"`   | Kilo pauses and asks for approval before running the tool |
-| `"deny"`  | The tool is blocked entirely                              |
+| Value | Behavior |
+|---|---|
+| `"allow"` | The tool runs automatically without prompting |
+| `"ask"` | Kilo pauses and asks for approval before running the tool |
+| `"deny"` | The tool is blocked entirely |
 
 When no rule matches a permission check, the default action is `ask`.
 
@@ -95,26 +105,59 @@ When no rule matches a permission check, the default action is `ask`.
 
 Permissions are configured under the `permission` key in `kilo.jsonc`. The following tool-specific permission levels are available:
 
-| Permission                 | Controls                                               |
-| -------------------------- | ------------------------------------------------------ |
-| `external_directory`       | Accessing files outside the project directory          |
-| `bash`                     | Executing shell commands                               |
-| `read`                     | Reading file contents                                  |
-| `edit`                     | Editing existing files                                 |
-| `glob`                     | File pattern matching / searching by name              |
-| `grep`                     | Searching file contents by regex                       |
-| `list`                     | Listing directory contents                             |
-| `task`                     | Launching sub-agents                                   |
-| `skill`                    | Loading specialized skills                             |
-| `lsp`                      | Language server protocol operations                    |
-| `todoread` / `todowrite`   | Reading and updating the todo list                     |
-| `websearch` / `codesearch` | Performing web or code searches                        |
-| `webfetch`                 | Fetching content from URLs                             |
-| `doom_loop`                | Allowing the agent to continue after repeated failures |
+| Permission | Controls |
+|---|---|
+| `external_directory` | Accessing files outside the project directory |
+| `bash` | Executing shell commands |
+| `read` | Reading file contents |
+| `edit` | Editing existing files |
+| `glob` | File pattern matching / searching by name |
+| `grep` | Searching file contents by regex |
+| `task` | Launching sub-agents |
+| `skill` | Loading specialized skills |
+| `lsp` | Language server protocol operations |
+| `todoread` / `todowrite` | Reading and updating the todo list |
+| `websearch` | Performing web searches |
+| `webfetch` | Fetching content from URLs |
+| `doom_loop` | Allowing the agent to continue after repeated failures |
 
 ## Glob-Pattern Rules
 
 Instead of a simple `"allow"` or `"deny"`, each tool can use glob-pattern rules for granular control. Patterns are matched against the tool's arguments (command strings, file paths, etc.), and the last matching rule wins.
+
+### Rule Precedence
+
+Permission rules are evaluated in config order. When more than one rule matches the requested permission and target pattern, the last matching rule wins.
+
+Put broad fallbacks first and exceptions after them:
+
+```json
+{
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "uv *": "allow"
+    }
+  }
+}
+```
+
+With that config, `uv pip install ...` is allowed because `uv *` appears after the catch-all `*`.
+
+If you put the catch-all last, it overrides the earlier specific rule:
+
+```json
+{
+  "permission": {
+    "bash": {
+      "uv *": "allow",
+      "*": "ask"
+    }
+  }
+}
+```
+
+With that config, `uv pip install ...` asks because the later `*` rule also matches.
 
 ### Example: Shell Commands
 
@@ -124,8 +167,8 @@ Allow git commands automatically, but prompt for everything else:
 {
   "permission": {
     "bash": {
-      "git *": "allow",
-      "*": "ask"
+      "*": "ask",
+      "git *": "allow"
     }
   }
 }
@@ -139,8 +182,8 @@ Prompt before reading `.env` files, but allow all other reads:
 {
   "permission": {
     "read": {
-      "*.env": "ask",
-      "*": "allow"
+      "*": "allow",
+      "*.env": "ask"
     }
   }
 }
@@ -154,11 +197,11 @@ Deny `rm -rf` commands, allow common dev commands, and ask for anything else:
 {
   "permission": {
     "bash": {
+      "*": "ask",
       "rm -rf *": "deny",
       "npm *": "allow",
       "bun *": "allow",
-      "git *": "allow",
-      "*": "ask"
+      "git *": "allow"
     }
   }
 }
@@ -176,7 +219,7 @@ Different agents can have different permission levels. Override the default perm
   "agent": {
     "code": {
       "permission": {
-        "bash": { "git *": "allow", "*": "ask" }
+        "bash": { "*": "ask", "git *": "allow" }
       }
     },
     "plan": {
@@ -190,15 +233,37 @@ Different agents can have different permission levels. Override the default perm
 
 In this example, the `code` agent can run `git` commands automatically and asks for other shell commands, while the `plan` agent cannot run shell commands at all.
 
+## Markdown Agent Files
+
+If you define agents in Markdown files, the `permission` frontmatter uses the same `allow` / `ask` / `deny` values and glob patterns as `kilo.jsonc`:
+
+```markdown
+---
+description: Reviews code for quality and best practices
+mode: subagent
+permission:
+  bash:
+    "*": ask
+    "git *": allow
+  read:
+    "*": allow
+    "*.env": ask
+---
+```
+
+This is the same permission shape described in [Agent Permissions](/docs/customize/agent-permissions), just shown in the agent-file format.
+
 ## Runtime Permission Requests
 
 When a tool is set to `"ask"`, Kilo pauses and displays a permission prompt. You have three options:
 
-| Option           | Behavior                                                 |
-| ---------------- | -------------------------------------------------------- |
-| **Allow once**   | Allow this specific invocation only                      |
-| **Allow always** | Allow this tool (or pattern) for the rest of the session |
-| **Reject**       | Block this specific invocation                           |
+| Option | Behavior |
+|---|---|
+| **Allow once** | Allow this specific invocation only |
+| **Allow always** | Save an allow rule for the matching tool or pattern in your global config |
+| **Reject** | Block this specific invocation |
+
+For shell commands, saved approvals are written under `permission.bash` and apply across CLI sessions.
 
 ## Defaults
 
@@ -207,6 +272,12 @@ Most tools default to `"*": "allow"` for a smooth out-of-the-box experience. Not
 - **`.env` files** — reading `.env` files prompts for approval. Files matching `*.env.*` (e.g., `.env.local`, `.env.production`) also trigger an ask, while `*.env.example` is explicitly allowed.
 - **`external_directory`** — accessing files outside the project prompts for approval
 - **`doom_loop`** — prompts when the agent enters a repeated failure cycle
+
+## MCP Tool Permissions
+
+MCP tools use the same `allow` / `ask` / `deny` permission system as built-in tools. Each MCP tool's permission key is its namespaced name: `{server}_{tool}` (e.g. `github_create_pull_request`). You can use glob patterns like `github_*` for broad rules.
+
+For full details and examples, see [MCP Tool Permissions](/docs/automate/mcp/using-in-kilo-code#auto-approve-tools).
 
 ## Full Configuration Example
 
@@ -217,12 +288,12 @@ This is a custom example showing the available configuration options — it does
 ```json
 {
   "permission": {
-    "read": { "*.env": "ask", "*": "allow" },
-    "edit": { "*.env": "ask", "*": "allow" },
+    "read": { "*": "allow", "*.env": "ask" },
+    "edit": { "*": "allow", "*.env": "ask" },
     "glob": { "*": "allow" },
     "grep": { "*": "allow" },
     "list": { "*": "allow" },
-    "bash": { "git *": "allow", "npm *": "allow", "*": "ask" },
+    "bash": { "*": "ask", "git *": "allow", "npm *": "allow" },
     "task": { "*": "allow" },
     "skill": { "*": "allow" },
     "lsp": { "*": "allow" },
@@ -230,14 +301,13 @@ This is a custom example showing the available configuration options — it does
     "todowrite": { "*": "allow" },
     "webfetch": { "*": "allow" },
     "websearch": { "*": "allow" },
-    "codesearch": { "*": "allow" },
     "external_directory": { "*": "ask" },
     "doom_loop": { "*": "ask" }
   },
   "agent": {
     "code": {
       "permission": {
-        "bash": { "git *": "allow", "npm *": "allow", "*": "ask" }
+        "bash": { "*": "ask", "git *": "allow", "npm *": "allow" }
       }
     }
   }
@@ -265,18 +335,18 @@ Click the toolbar to expand it and configure individual permissions:
 
 ### Available Permissions
 
-| Permission                     | What it does                                     | Risk level  |
-| ------------------------------ | ------------------------------------------------ | ----------- |
-| **Read files and directories** | Lets Kilo Code access files without asking       | Medium      |
-| **Edit files**                 | Lets Kilo Code modify files without asking       | **High**    |
-| **Execute approved commands**  | Runs whitelisted terminal commands automatically | **High**    |
-| **Use the browser**            | Allows headless browser interaction              | Medium      |
-| **Use MCP servers**            | Lets Kilo Code use configured MCP services       | Medium-High |
-| **Switch modes**               | Changes between Kilo Code modes automatically    | Low         |
-| **Create & complete subtasks** | Manages subtasks without confirmation            | Low         |
-| **Retry failed requests**      | Automatically retries failed API requests        | Low         |
-| **Answer follow-up questions** | Selects default answer for follow-up questions   | Low         |
-| **Update todo list**           | Automatically updates task progress              | Low         |
+| Permission | What it does | Risk level |
+|---|---|---|
+| **Read files and directories** | Lets Kilo Code access files without asking | Medium |
+| **Edit files** | Lets Kilo Code modify files without asking | **High** |
+| **Execute approved commands** | Runs whitelisted terminal commands automatically | **High** |
+| **Use the browser** | Allows headless browser interaction | Medium |
+| **Use MCP servers** | Lets Kilo Code use configured MCP services | Medium-High |
+| **Switch modes** | Changes between Kilo Code modes automatically | Low |
+| **Create & complete subtasks** | Manages subtasks without confirmation | Low |
+| **Retry failed requests** | Automatically retries failed API requests | Low |
+| **Answer follow-up questions** | Selects default answer for follow-up questions | Low |
+| **Update todo list** | Automatically updates task progress | Low |
 
 ## Master Toggle for Quick Control
 
