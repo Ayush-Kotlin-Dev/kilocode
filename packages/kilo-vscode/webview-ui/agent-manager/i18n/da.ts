@@ -46,6 +46,7 @@ export const dict = {
   "agentManager.session.readonly": "Skrivebeskyttet session",
   "agentManager.session.noSessions": "Ingen åbne sessioner",
   "agentManager.tab.close": "Luk",
+  "agentManager.tab.closeOthers": "Luk andre",
   "agentManager.tab.closeTab": "Luk fane",
   "agentManager.tab.forkSession": "Forgren session",
   "agentManager.tab.terminal": "Terminal",
@@ -182,6 +183,13 @@ export const dict = {
   "agentManager.review.collapsedOnly": "{{count}} foldet sammen",
   "agentManager.review.collapsedWithLarge": "{{collapsed}} foldet sammen, {{large}} store",
   "agentManager.review.largeFileCollapsed": "Stor fil (sammenklappet)",
+  "agentManager.review.image": "Billede",
+  "agentManager.review.imageBefore": "Før",
+  "agentManager.review.imageAfter": "Efter",
+  "agentManager.review.imageTooLarge": "Billedet er for stort til at kunne forhåndsvises ({{size}}).",
+  "agentManager.review.imageUnreadable": "Dette billede kunne ikke gengives.",
+  "agentManager.review.imageUnavailable":
+    "Forhåndsvisning af billedet er ikke tilgængelig for dette snapshot af sessionen.",
   "agentManager.review.endOfLongDiff": "Du nåede slutningen!",
 
   "agentManager.import.pullRequest": "Pull Request",

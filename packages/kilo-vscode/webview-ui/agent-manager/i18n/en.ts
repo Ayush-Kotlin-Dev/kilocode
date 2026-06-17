@@ -50,6 +50,7 @@ export const dict = {
   "agentManager.session.noSessions": "No sessions open",
 
   "agentManager.tab.close": "Close",
+  "agentManager.tab.closeOthers": "Close Others",
   "agentManager.tab.closeTab": "Close tab",
   "agentManager.tab.forkSession": "Fork Session",
   "agentManager.tab.terminal": "Terminal",
@@ -187,6 +188,12 @@ export const dict = {
   "agentManager.review.collapsedOnly": "{{count}} collapsed",
   "agentManager.review.collapsedWithLarge": "{{collapsed}} collapsed, {{large}} large",
   "agentManager.review.largeFileCollapsed": "Large file (collapsed)",
+  "agentManager.review.image": "image",
+  "agentManager.review.imageBefore": "Before",
+  "agentManager.review.imageAfter": "After",
+  "agentManager.review.imageTooLarge": "Image is too large to preview ({{size}}).",
+  "agentManager.review.imageUnreadable": "This image could not be rendered.",
+  "agentManager.review.imageUnavailable": "Image preview is unavailable for this session snapshot.",
   "agentManager.review.endOfLongDiff": "You made it to the end!",
 
   "agentManager.import.pullRequest": "Pull Request",

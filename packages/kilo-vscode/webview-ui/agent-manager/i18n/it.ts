@@ -50,6 +50,7 @@ export const dict = {
   "agentManager.session.noSessions": "Nessuna sessione aperta",
 
   "agentManager.tab.close": "Chiudi",
+  "agentManager.tab.closeOthers": "Chiudi le altre",
   "agentManager.tab.closeTab": "Chiudi scheda",
   "agentManager.tab.forkSession": "Forka sessione",
   "agentManager.tab.terminal": "Terminale",
@@ -188,6 +189,13 @@ export const dict = {
   "agentManager.review.collapsedOnly": "{{count}} compressi",
   "agentManager.review.collapsedWithLarge": "{{collapsed}} compressi, {{large}} grandi",
   "agentManager.review.largeFileCollapsed": "File grande (compresso)",
+  "agentManager.review.image": "Immagine",
+  "agentManager.review.imageBefore": "Prima",
+  "agentManager.review.imageAfter": "Dopo",
+  "agentManager.review.imageTooLarge": "L'immagine è troppo grande per visualizzare l'anteprima ({{size}}).",
+  "agentManager.review.imageUnreadable": "Non è stato possibile visualizzare questa immagine.",
+  "agentManager.review.imageUnavailable":
+    "L'anteprima dell'immagine non è disponibile per questa istantanea della sessione.",
   "agentManager.review.endOfLongDiff": "Sei arrivato alla fine!",
 
   "agentManager.import.pullRequest": "Pull Request",
